@@ -1,8 +1,8 @@
 function [fnames] = coch_spectrotemporal(stim_names, wav_dir, out_sr,pc,modulation_types,nonlin);
 % function [pca_timecourse_MAT_files, pca_weight_MAT_files, model_features, pca_timecourses_allstim_allmodels, coch_output_directory, modulation_output_directory, pca_output_directories] = coch_spectrotemporal(input_directory, stim_names, wav_dir, out_sr,pc);
 
-root_directory = '/scratch/snormanh_lab/shared/Sigurd/sam_code_workspace/projects';
-project_directory = [root_directory '/intracranial-natsound165'];
+root_directory = './feature_extraction/sam_code_workspace/';
+project_directory = [root_directory '/project'];
 addpath(genpath([root_directory '/spectrotemporal-synthesis-v2']));
 addpath(genpath([root_directory '/general-analysis-code']));
 addpath('/scratch/snormanh_lab/shared/Sigurd/sam_code_workspace/code');

@@ -5,7 +5,7 @@ import hdf5storage
 
 
 def generate_cochleagram_and_spectrotemporal(
-    stim_names, wav_dir, out_sr, pc, modulation_types, nonlin, output_root
+    stim_names, wav_dir, out_sr, pc, modulation_types, nonlin, output_root, debug=False
 ):
     """
     This function generates a cochleagram for a given audio file.
@@ -18,8 +18,11 @@ def generate_cochleagram_and_spectrotemporal(
     Returns:
     None. The function saves the cochleagram and its metadata to the output directory.
     """
-    eng = matlab.engine.start_matlab()
-    eng.addpath(eng.genpath("/home/gliao2/samlab_Sigurd/feature_extration/code/utils"))
+    if debug:
+        eng = matlab.engine.start_matlab("-desktop -r 'format short'")
+    else:
+        eng = matlab.engine.start_matlab()
+    eng.addpath(eng.genpath(os.path.dirname(__file__)))
 
     feature_class_out_dir = os.path.join(output_root, "features", "cochleagram")
     meta_out_dir = os.path.join(output_root, "feature_metadata")
@@ -29,16 +32,15 @@ def generate_cochleagram_and_spectrotemporal(
         os.makedirs(feature_variant_cochleagram_dir)
     if not os.path.exists(meta_out_dir):
         os.makedirs(meta_out_dir)
-
+    cochleagrams = eng.coch_spectrotemporal(
+        stim_names, wav_dir, out_sr, pc, modulation_types, nonlin
+    )["fnames"]
     wav_name = os.path.basename(wav_path)
     wav_name_no_ext = os.path.splitext(wav_name)[0]
     out_mat_path = os.path.join(
         feature_variant_cochleagram_dir, f"{wav_name_no_ext}.mat"
     )
 
-    cochleagrams = eng.coch_spectrotemporal(
-        stim_names, wav_dir, out_sr, pc, modulation_types, nonlin
-    )["fnames"]
     cochleagrams = np.array(cochleagrams)
     # clip or pad so that the number of time steps is n_t
     if n_t is not None:
@@ -121,14 +123,20 @@ P.compression_factor = 0.3;
 P.causal = true;"""
         )
 
-def cochleagram_and_spectrotemporal(device, output_root, stim_names, wav_dir, out_sr=100, pc=100, **kwargs):
-#     % % tempmod: only temporal modulation filters
-# % % specmod: only spectral modulation filters
-# % % spectempmod: joint spectrotemporal filters
-# % modulation_types = {'tempmod', 'specmod', 'spectempmod'};
-# nonlin: modulus or real or rect
-    modulation_types = kwargs.get("modulation_types", ["tempmod", "specmod", "spectempmod"])
+
+def cochleagram_and_spectrotemporal(
+    device, output_root, stim_names, wav_dir, out_sr=100, pc=100, **kwargs
+):
+    #     % % tempmod: only temporal modulation filters
+    # % % specmod: only spectral modulation filters
+    # % % spectempmod: joint spectrotemporal filters
+    # % modulation_types = {'tempmod', 'specmod', 'spectempmod'};
+    # nonlin: modulus or real or rect
+    modulation_types = kwargs.get(
+        "modulation_types", ["tempmod", "specmod", "spectempmod"]
+    )
     nonlin = kwargs.get("nonlin", "modulus")
+    debug = kwargs.get("debug", False)
     generate_cochleagram_and_spectrotemporal(
         stim_names=stim_names,
         wav_dir=wav_dir,
@@ -137,8 +145,19 @@ def cochleagram_and_spectrotemporal(device, output_root, stim_names, wav_dir, ou
         modulation_types=modulation_types,
         nonlin=nonlin,
         output_root=output_root,
+        debug=debug,
     )
 
 
 if __name__ == "__main__":
-
+    cochleagram_and_spectrotemporal(
+        device="cuda",
+        output_root=os.path.abspath(
+            f"{__file__}/../../../projects_toy/intracranial-natsound165/analysis"
+        ),
+        stim_names=["stim5_alarm_clock", "stim7_applause"],
+        wav_dir=os.path.abspath(
+            f"{__file__}/../../../projects_toy/intracranial-natsound165/stimuli/stimulus_audio"
+        ),
+        debug=True,
+    )
