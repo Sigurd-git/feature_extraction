@@ -42,8 +42,12 @@ def parse(cfg):
     return args_dict
 
 
+current_folder_path = os.path.dirname(__file__)
+current_folder_absolute_path = os.path.abspath(current_folder_path)
+
+
 @hydra.main(
-    config_path="/home/gliao2/samlab_Sigurd/feature_extration/code/conf",
+    config_path=f"{current_folder_absolute_path}/conf",
     config_name="conf.yaml",
     version_base="1.3",
 )
