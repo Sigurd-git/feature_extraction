@@ -1,0 +1,19 @@
+defaults:
+  - _self_
+  - env: example
+
+env:
+  device: null
+  feature: null
+  out_sr: 100
+  pc: 100
+  project: ""
+  root: "/scratch/snormanh_lab/shared/projects"
+  spectrogram:
+    nfilts: 80
+  stim_names: ""
+
+hydra:
+  run:
+    dir: .
+

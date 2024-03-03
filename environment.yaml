@@ -1,0 +1,31 @@
+name: feature_py39
+channels:
+  - conda-forge
+dependencies:
+  - python=3.9
+  - tqdm
+  - matplotlib
+  - seaborn
+  - pandas
+  - scikit-learn
+  - numpy
+  - hdf5storage
+  - dill
+  - scipy
+  - pysoundfile
+  - omegaconf
+  - jupyterlab
+  - einops
+  - pip
+  - pip:
+    - torch
+    - torchvision
+    - torchaudio
+    - jupyter-matlab-proxy
+    - transformers
+    - datasets
+    - librosa
+    - soundfile
+    - /scratch/snormanh_lab/shared/code/my_whisper
+    - /scratch/snormanh_lab/shared/code/snormanh_lab_python
+
