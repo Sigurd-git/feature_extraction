@@ -24,20 +24,17 @@ class PCA:
         Parameters:
         - X: numpy array of shape (n_samples, n_features)
         """
-        # 去均值
+
         if self.demean:
             self.mean = np.mean(X, axis=0)
             X = X - self.mean
 
-        # 标准化
         if self.standardize:
             self.std = np.std(X, axis=0, ddof=1)
             X = X / self.std
 
-        # 计算SVD
         self.U, self.S, self.Vt = svd(X, full_matrices=False)
 
-        # 提取前n个主成分
         self.components = self.Vt[: self.n_components]
 
     def transform(self, X):
@@ -122,9 +119,7 @@ def generate_pc(
         if not os.path.exists(variant_dir):
             os.makedirs(variant_dir)
         out_mat_path = os.path.join(variant_dir, "pca_usv.mat")
-        hdf5storage.savemat(
-            out_mat_path, {"U": U, "S": S, "Vt": Vt}
-        )
+        hdf5storage.savemat(out_mat_path, {"U": U, "S": S, "Vt": Vt})
         return pca_pipeline
     else:
         features_pc = pca_pipeline.transform(feature)
