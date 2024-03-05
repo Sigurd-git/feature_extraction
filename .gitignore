@@ -155,7 +155,8 @@ cython_debug/
 # matlab
 *.asv
 
-sam_code_workspace/projects
+sam_code_workspace/project/features
 .hydra
 .vscode
 ckpts
+projects_toy/intracranial-natsound165/analysis/features

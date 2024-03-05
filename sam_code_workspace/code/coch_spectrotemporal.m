@@ -1,11 +1,10 @@
-function [fnames] = coch_spectrotemporal(stim_names, wav_dir, out_sr,pc,modulation_types,nonlin);
-% function [pca_timecourse_MAT_files, pca_weight_MAT_files, model_features, pca_timecourses_allstim_allmodels, coch_output_directory, modulation_output_directory, pca_output_directories] = coch_spectrotemporal(input_directory, stim_names, wav_dir, out_sr,pc);
+function [pca_weight_MAT_files, model_features, pca_timecourses_allstim_allmodels, coch_output_directory, modulation_output_directory, pca_output_directories] = coch_spectrotemporal(stim_names, wav_dir, out_sr, pc, modulation_types, nonlin);
 
 root_directory = './feature_extraction/sam_code_workspace/';
 project_directory = [root_directory '/project'];
 addpath(genpath([root_directory '/spectrotemporal-synthesis-v2']));
 addpath(genpath([root_directory '/general-analysis-code']));
-addpath('/scratch/snormanh_lab/shared/Sigurd/sam_code_workspace/code');
+addpath(genpath([root_directory '/code']));
 
 % sampling rate to use for the analysis
 feature_sr = out_sr;
@@ -41,19 +40,19 @@ P.save_highres = true;
 fnames = strcat(stim_names, '.wav');
 %% 
 
-% % add silence to the end of the waveforms
-% for i = 1:length(fnames)
-%     [wav, sr] = audioread([wav_dir '/' fnames{i}]);
-%     wav = [wav; zeros(sr,1)];
-%     output_file = [wav_dir '-1sec-pad/' fnames{i}];
-%     audiowrite(mkpdir(output_file), wav, sr);
-% end
-% %% 
+% add silence to the end of the waveforms
+for i = 1:length(fnames)
+    [wav, sr] = audioread([wav_dir '/' fnames{i}]);
+    wav = [wav; zeros(sr,1)];
+    output_file = [wav_dir '-1sec-pad/' fnames{i}];
+    audiowrite(mkpdir(output_file), wav, sr);
+end
+%% 
 
-% % compute features and get PCs
-% feature_directory = [project_directory '/features/spectemp-with-padding'];
-% [pca_timecourse_MAT_files, pca_weight_MAT_files, model_features, pca_timecourses_allstim_allmodels, coch_output_directory, modulation_output_directory, pca_output_directories] = allfeats_pca_multistim(...
-%     modulation_types, fnames, nPCs, feature_sr, [input_directory '-1sec-pad'], feature_directory, P);
+% compute features and get PCs
+feature_directory = [project_directory '/features/spectemp-with-padding'];
+[pca_timecourse_MAT_files, pca_weight_MAT_files, model_features, pca_timecourses_allstim_allmodels, coch_output_directory, modulation_output_directory, pca_output_directories] = allfeats_pca_multistim(...
+    modulation_types, fnames, nPCs, feature_sr, [wav_dir '-1sec-pad'], feature_directory, P);
 
 
 end

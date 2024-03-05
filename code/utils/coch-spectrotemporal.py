@@ -5,7 +5,15 @@ import hdf5storage
 
 
 def generate_cochleagram_and_spectrotemporal(
-    stim_names, wav_dir, out_sr, pc, modulation_types, nonlin, output_root, debug=False
+    stim_names,
+    wav_dir,
+    out_sr,
+    pc,
+    modulation_type,
+    nonlin,
+    output_root,
+    debug=False,
+    n_t=None,
 ):
     """
     This function generates a cochleagram for a given audio file.
@@ -20,47 +28,110 @@ def generate_cochleagram_and_spectrotemporal(
     """
     if debug:
         eng = matlab.engine.start_matlab("-desktop -r 'format short'")
+        eng.open(
+            os.path.abspath(
+                f"{__file__}/../../../sam_code_workspace/code/coch_spectrotemporal.m"
+            )
+        )
     else:
         eng = matlab.engine.start_matlab()
-    eng.addpath(eng.genpath(os.path.dirname(__file__)))
+    eng.addpath(
+        eng.genpath(os.path.abspath(f"{__file__}/../../../sam_code_workspace/code"))
+    )
 
-    feature_class_out_dir = os.path.join(output_root, "features", "cochleagram")
+    (
+        pca_weight_MAT_files,
+        model_features,
+        pca_timecourses_allstim_allmodels,
+        coch_output_directory,
+        modulation_output_directory,
+        pca_output_directories,
+    ) = eng.coch_spectrotemporal(
+        stim_names, wav_dir, out_sr, pc, [modulation_type], nonlin, nargout=6
+    )
+    coch_pca_directory = pca_output_directories[0]
+    spectrotemporal_pca_directory = pca_output_directories[1]
+
+    # coch
     meta_out_dir = os.path.join(output_root, "feature_metadata")
-    feature_variant_cochleagram_dir = os.path.join(feature_class_out_dir, "original")
+
+    coch_class_out_dir = os.path.join(output_root, "features", "cochleagram")
+    feature_variant_cochleagram_dir = (
+        os.path.join(coch_class_out_dir, "original")
+        if pc is None
+        else os.path.join(coch_class_out_dir, f"pc{pc}")
+    )
+    spectrotemporal_class_out_dir = os.path.join(
+        output_root, "features", "spectrotemporal"
+    )
+    feature_variant_spectrotemporal_dir = (
+        os.path.join(spectrotemporal_class_out_dir, f"{modulation_type}_{nonlin}")
+        if pc is None
+        else os.path.join(
+            spectrotemporal_class_out_dir, f"{modulation_type}_{nonlin}_pc{pc}"
+        )
+    )
 
     if not os.path.exists(feature_variant_cochleagram_dir):
         os.makedirs(feature_variant_cochleagram_dir)
+    if not os.path.exists(feature_variant_spectrotemporal_dir):
+        os.makedirs(feature_variant_spectrotemporal_dir)
     if not os.path.exists(meta_out_dir):
         os.makedirs(meta_out_dir)
-    cochleagrams = eng.coch_spectrotemporal(
-        stim_names, wav_dir, out_sr, pc, modulation_types, nonlin
-    )["fnames"]
-    wav_name = os.path.basename(wav_path)
-    wav_name_no_ext = os.path.splitext(wav_name)[0]
-    out_mat_path = os.path.join(
-        feature_variant_cochleagram_dir, f"{wav_name_no_ext}.mat"
-    )
 
-    cochleagrams = np.array(cochleagrams)
-    # clip or pad so that the number of time steps is n_t
-    if n_t is not None:
-        if cochleagrams.shape[0] > n_t:
-            print(f"clip:{wav_name} from {cochleagrams.shape[0]} to {n_t}")
-            cochleagrams = cochleagrams[:n_t, :]
-        elif cochleagrams.shape[0] < n_t:
-            print(f"pad:{wav_name} from {cochleagrams.shape[0]} to {n_t}")
-            cochleagrams = np.pad(
-                cochleagrams, ((0, n_t - cochleagrams.shape[0]), (0, 0))
-            )
+    for stim_index, stim_name in enumerate(stim_names):
+        coch_out_mat_path = os.path.join(
+            feature_variant_cochleagram_dir, f"{stim_name}.mat"
+        )
+        cochleagram_path = os.path.join(coch_pca_directory, f"coch_{stim_name}.mat")
+        cochleagrams = hdf5storage.loadmat(cochleagram_path)["F"]  # t x pc
+        # clip or pad so that the number of time steps is n_t
+        if n_t is not None:
+            if cochleagrams.shape[0] > n_t:
+                print(f"clip:{stim_name} from {cochleagrams.shape[0]} to {n_t}")
+                cochleagrams = cochleagrams[:n_t, :]
+            elif cochleagrams.shape[0] < n_t:
+                print(f"pad:{stim_name} from {cochleagrams.shape[0]} to {n_t}")
+                cochleagrams = np.pad(
+                    cochleagrams, ((0, n_t - cochleagrams.shape[0]), (0, 0))
+                )
 
-    # save data as mat
-    hdf5storage.savemat(out_mat_path, {"features": cochleagrams})
+        # save data as mat
+        hdf5storage.savemat(coch_out_mat_path, {"features": cochleagrams})
 
-    # generate meta file for cochleagram
-    with open(
-        os.path.join(feature_variant_cochleagram_dir, f"{wav_name_no_ext}.txt"), "w"
-    ) as f:
-        f.write(f"The shape of this feature is {cochleagrams.shape}.")
+        # generate meta file for cochleagram
+        with open(
+            os.path.join(feature_variant_cochleagram_dir, f"{stim_name}.txt"), "w"
+        ) as f:
+            f.write(f"The shape of this feature is {cochleagrams.shape}.")
+
+        spectrotemporal_out_mat_path = os.path.join(
+            feature_variant_spectrotemporal_dir, f"{stim_name}.mat"
+        )
+        spectrotemporal_path = os.path.join(
+            spectrotemporal_pca_directory, f"{stim_name}.mat"
+        )
+        spectrotemporals = hdf5storage.loadmat(spectrotemporal_path)["F"]  # t x pc
+        if n_t is not None:
+            if spectrotemporals.shape[0] > n_t:
+                print(f"clip:{stim_name} from {spectrotemporals.shape[0]} to {n_t}")
+                spectrotemporals = spectrotemporals[:n_t, :]
+            elif spectrotemporals.shape[0] < n_t:
+                print(f"pad:{stim_name} from {spectrotemporals.shape[0]} to {n_t}")
+                spectrotemporals = np.pad(
+                    spectrotemporals, ((0, n_t - spectrotemporals.shape[0]), (0, 0))
+                )
+
+        hdf5storage.savemat(
+            spectrotemporal_out_mat_path, {"features": spectrotemporals}
+        )
+        with open(
+            os.path.join(feature_variant_spectrotemporal_dir, f"{stim_name}.txt"), "w"
+        ) as f:
+            f.write(
+                f"The shape of this feature is {spectrotemporals.shape}."
+            )  # (n_time,n_frequency)
+
     # generate meta file for cochleagram
     with open(os.path.join(meta_out_dir, "cochleagram_original.txt"), "w") as f:
         f.write(
@@ -132,9 +203,7 @@ def cochleagram_and_spectrotemporal(
     # % % spectempmod: joint spectrotemporal filters
     # % modulation_types = {'tempmod', 'specmod', 'spectempmod'};
     # nonlin: modulus or real or rect
-    modulation_types = kwargs.get(
-        "modulation_types", ["tempmod", "specmod", "spectempmod"]
-    )
+    modulation_type = kwargs.get("modulation_type", ["tempmod"])
     nonlin = kwargs.get("nonlin", "modulus")
     debug = kwargs.get("debug", False)
     generate_cochleagram_and_spectrotemporal(
@@ -142,7 +211,7 @@ def cochleagram_and_spectrotemporal(
         wav_dir=wav_dir,
         out_sr=out_sr,
         pc=pc,
-        modulation_types=modulation_types,
+        modulation_type=modulation_type,
         nonlin=nonlin,
         output_root=output_root,
         debug=debug,
@@ -159,5 +228,6 @@ if __name__ == "__main__":
         wav_dir=os.path.abspath(
             f"{__file__}/../../../projects_toy/intracranial-natsound165/stimuli/stimulus_audio"
         ),
+        modulation_type="tempmod",
         debug=True,
     )
