@@ -75,6 +75,19 @@ def main(cfg):
             out_sr=args_dict.out_sr,
             pc=args_dict.pc,
         )
+    elif args_dict.feature == "cochleagram_spectrotemporal":
+        from utils.cochleagram_spectrotemporal import cochleagram_spectrotemporal
+
+        cochleagram_spectrotemporal(
+            args_dict.device,
+            args_dict.output_root,
+            args_dict.stim_names,
+            args_dict.wav_dir,
+            out_sr=args_dict.out_sr,
+            pc=args_dict.pc,
+            modulation_type=args_dict.spectrotemporal.modulation_type,
+            nonlin=args_dict.spectrotemporal.nonlin,
+        )
     elif args_dict.feature == "cochresnet":
         from utils.cochresnet import cochresnet
 

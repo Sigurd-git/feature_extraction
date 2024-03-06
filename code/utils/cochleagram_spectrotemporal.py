@@ -38,7 +38,7 @@ def generate_cochleagram_and_spectrotemporal(
     eng.addpath(
         eng.genpath(os.path.abspath(f"{__file__}/../../../sam_code_workspace/code"))
     )
-
+    out_sr = float(out_sr)
     (
         pca_weight_MAT_files,
         model_features,
@@ -61,6 +61,7 @@ def generate_cochleagram_and_spectrotemporal(
         if pc is None
         else os.path.join(coch_class_out_dir, f"pc{pc}")
     )
+    feature_original_cochleagram_dir = os.path.join(coch_class_out_dir, "original")
     spectrotemporal_class_out_dir = os.path.join(
         output_root, "features", "spectrotemporal"
     )
@@ -74,16 +75,43 @@ def generate_cochleagram_and_spectrotemporal(
 
     if not os.path.exists(feature_variant_cochleagram_dir):
         os.makedirs(feature_variant_cochleagram_dir)
+    if not os.path.exists(feature_original_cochleagram_dir):
+        os.makedirs(feature_original_cochleagram_dir)
     if not os.path.exists(feature_variant_spectrotemporal_dir):
         os.makedirs(feature_variant_spectrotemporal_dir)
     if not os.path.exists(meta_out_dir):
         os.makedirs(meta_out_dir)
 
     for stim_index, stim_name in enumerate(stim_names):
+        if pc is not None:
+            coch_out_mat_path = os.path.join(
+                feature_variant_cochleagram_dir, f"{stim_name}.mat"
+            )
+            cochleagram_path = os.path.join(coch_pca_directory, f"coch_{stim_name}.mat")
+            cochleagrams = hdf5storage.loadmat(cochleagram_path)["F"]  # t x pc
+            # clip or pad so that the number of time steps is n_t
+            if n_t is not None:
+                if cochleagrams.shape[0] > n_t:
+                    print(f"clip:{stim_name} from {cochleagrams.shape[0]} to {n_t}")
+                    cochleagrams = cochleagrams[:n_t, :]
+                elif cochleagrams.shape[0] < n_t:
+                    print(f"pad:{stim_name} from {cochleagrams.shape[0]} to {n_t}")
+                    cochleagrams = np.pad(
+                        cochleagrams, ((0, n_t - cochleagrams.shape[0]), (0, 0))
+                    )
+
+            # save data as mat
+            hdf5storage.savemat(coch_out_mat_path, {"features": cochleagrams})
+
+            # generate meta file for cochleagram
+            with open(
+                os.path.join(feature_variant_cochleagram_dir, f"{stim_name}.txt"), "w"
+            ) as f:
+                f.write(f"The shape of this feature is {cochleagrams.shape}.")
         coch_out_mat_path = os.path.join(
-            feature_variant_cochleagram_dir, f"{stim_name}.mat"
+            feature_original_cochleagram_dir, f"{stim_name}.mat"
         )
-        cochleagram_path = os.path.join(coch_pca_directory, f"coch_{stim_name}.mat")
+        cochleagram_path = os.path.join(coch_output_directory, f"coch_{stim_name}.mat")
         cochleagrams = hdf5storage.loadmat(cochleagram_path)["F"]  # t x pc
         # clip or pad so that the number of time steps is n_t
         if n_t is not None:
@@ -101,15 +129,14 @@ def generate_cochleagram_and_spectrotemporal(
 
         # generate meta file for cochleagram
         with open(
-            os.path.join(feature_variant_cochleagram_dir, f"{stim_name}.txt"), "w"
+            os.path.join(feature_original_cochleagram_dir, f"{stim_name}.txt"), "w"
         ) as f:
             f.write(f"The shape of this feature is {cochleagrams.shape}.")
-
         spectrotemporal_out_mat_path = os.path.join(
             feature_variant_spectrotemporal_dir, f"{stim_name}.mat"
         )
         spectrotemporal_path = os.path.join(
-            spectrotemporal_pca_directory, f"{stim_name}.mat"
+            spectrotemporal_pca_directory, f"{modulation_type}_{nonlin}_{stim_name}.mat"
         )
         spectrotemporals = hdf5storage.loadmat(spectrotemporal_path)["F"]  # t x pc
         if n_t is not None:
@@ -195,7 +222,7 @@ P.causal = true;"""
         )
 
 
-def cochleagram_and_spectrotemporal(
+def cochleagram_spectrotemporal(
     device, output_root, stim_names, wav_dir, out_sr=100, pc=100, **kwargs
 ):
     #     % % tempmod: only temporal modulation filters
@@ -219,7 +246,7 @@ def cochleagram_and_spectrotemporal(
 
 
 if __name__ == "__main__":
-    cochleagram_and_spectrotemporal(
+    cochleagram_spectrotemporal(
         device="cuda",
         output_root=os.path.abspath(
             f"{__file__}/../../../projects_toy/intracranial-natsound165/analysis"

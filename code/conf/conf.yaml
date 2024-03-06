@@ -11,6 +11,9 @@ env:
   root: "/scratch/snormanh_lab/shared/projects"
   spectrogram:
     nfilts: 80
+  spectrotemporal:
+    modulation_type: "tempmod"
+    nonlin: "modulus"
   stim_names: ""
 
 hydra:
