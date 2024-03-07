@@ -34,7 +34,7 @@ P.std_feats = false;
 
 % whether to explicitly compute the features and whether to overwrite
 P.return_PCA_timecourses = false;
-P.overwrite = false;
+P.overwrite = true;
 P.save_highres = true;
 
 

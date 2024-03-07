@@ -2,8 +2,8 @@
 #SBATCH -p preempt -t 04:00:00
 #SBATCH -c 20
 #SBATCH -a 0-4
-#SBATCH --mem=64G
-#SBATCH --gres=gpu:1 -x bhg0044,bhg0046,bhg0047,bhg0048
+#SBATCH --mem=128G
+##SBATCH --gres=gpu:1 -x bhg0044,bhg0046,bhg0047,bhg0048
 #SBATCH -o /scratch/snormanh_lab/shared/projects/syllable-invariances_v2/analysis/logs/cs%a.txt
 #SBATCH --mail-type=BEGIN,END,FAIL
 #SBATCH --mail-user=guoyang_liao@urmc.rochester.edu
@@ -15,4 +15,11 @@ modulation_types=('tempmod' 'specmod' 'spectempmod' 'spectempmod' 'spectempmod')
 model="cochleagram_spectrotemporal"
 nonlin=${nonlins[$SLURM_ARRAY_TASK_ID]}
 modulation_type=${modulation_types[$SLURM_ARRAY_TASK_ID]}
-python /home/gliao2/samlab_Sigurd/feature_extration/code/main.py "env=syllable-invariances_v2" "env.feature=$model" "env.spectrotemporal.modulation_type=$modulation_type" "env.spectrotemporal.nonlin=$nonlin"
+
+#如果$SLURM_ARRAY_TASK_ID不为0则睡眠10s
+if [ $SLURM_ARRAY_TASK_ID -ne 0 ]; then
+    sleep 10
+fi
+
+
+python /scratch/snormanh_lab/shared/code/snormanh_lab_python/feature_extraction/code/main.py "env=syllable-invariances_v2" "env.feature=$model" "env.spectrotemporal.modulation_type=$modulation_type" "env.spectrotemporal.nonlin=$nonlin"

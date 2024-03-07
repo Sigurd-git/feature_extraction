@@ -19,7 +19,7 @@ def parse(cfg):
     root = args.root  # /scratch/snormanh_lab/shared/projects
     project = args.project
     output_root = f"{root}/{project}/analysis"
-    wav_dir = f"{root}/{project}/stimuli/stimulus_audio"
+    wav_dir = f"{root}/{project}/stimuli/audio"
     if args.stim_names == "":
         # find stims using glob
         wav_paths = glob.glob(f"{wav_dir}/*.wav")
