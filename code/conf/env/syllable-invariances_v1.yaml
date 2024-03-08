@@ -1,0 +1,5 @@
+defaults:
+  - _self_
+
+project: "syllable-invariances_v1"
+stim_names: "natural-normal,natural-fast,natural-slow,random-normal-order1,random-fast-order1,random-slow-order1,natural-normal-async-variation,natural-fast-async-variation,natural-slow-async-variation,random-normal-order2-async-variation"
