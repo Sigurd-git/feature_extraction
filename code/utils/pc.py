@@ -27,15 +27,35 @@ class PCA:
 
         if self.demean:
             self.mean = np.mean(X, axis=0)
-            X = X - self.mean
+        else:
+            self.mean = 0
+        X = X - self.mean
 
         if self.standardize:
             self.std = np.std(X, axis=0, ddof=1)
-            X = X / self.std
+        else:
+            self.std = 1
+        X = X / self.std
 
         self.U, self.S, self.Vt = svd(X, full_matrices=False)
 
         self.components = self.Vt[: self.n_components]
+
+    def load(self, mean, std, V):
+        """
+        Load the mean, standard deviation, and principal components from saved files to prepare for PCA.
+
+        Args:
+            mean (numpy.ndarray): The mean of the data.
+            std (numpy.ndarray): The standard deviation of the data.
+            V (numpy.ndarray): The principal components of the data.
+
+        Returns:
+            None
+        """
+        self.mean = mean
+        self.std = std
+        self.components = V.T
 
     def transform(self, X):
         """
@@ -56,13 +76,13 @@ class PCA:
         - Vt_new: Vt matrix obtained by SVD decomposition
         """
         # Go to the average
-        if self.demean:
-            X = X - self.mean
+
+        X = X - self.mean
         # Standardization
-        if self.standardize:
-            X = X / self.std
+
+        X = X / self.std
         # Convert the PCA weight obtained during training
-        X_transformed = np.dot(X, self.components.T)
+        X_transformed = np.matmul(X, self.components.T)
 
         return X_transformed
 
@@ -83,82 +103,111 @@ class PCA:
         return X_transformed
 
 
-def generate_pc(
+def generate_pca_pipeline(
     wav_features,
     pc,
     output_roots,
     feature_name,
-    wav_noext_names,
     demean=True,
     std=False,
     variant=None,
     appendix="",
-    pca_pipeline=None,
 ):
     # pc should be a number
     # concatenate all features in time
-
     if isinstance(output_roots, str):
         # broadcast to list
         output_roots = [output_roots] * len(wav_features)
 
     feature = np.concatenate(wav_features, axis=0)
-    if pca_pipeline is None:
-        pca_pipeline = PCA(n_components=pc, demean=demean, standardize=std)
-        pca_pipeline.fit(feature)
-        U = pca_pipeline.U
-        S = pca_pipeline.S
-        Vt = pca_pipeline.Vt
-        # asser output_roots are all the same
-        assert np.all([output_root == output_roots[0] for output_root in output_roots])
-        feature_dir = os.path.join(output_roots[0], "features", feature_name)
+
+    pca_pipeline = PCA(n_components=pc, demean=demean, standardize=std)
+    pca_pipeline.fit(feature)
+
+    Vt = pca_pipeline.Vt
+    # asser output_roots are all the same
+    assert np.all([output_root == output_roots[0] for output_root in output_roots])
+    feature_dir = os.path.join(output_roots[0], "features", feature_name)
+    if variant is None:
+        variant_dir = os.path.join(feature_dir, f"pc{pc}{appendix}")
+    else:
+        variant_dir = os.path.join(feature_dir, f"{variant}_pc{pc}{appendix}")
+
+    os.makedirs(variant_dir, exist_ok=True)
+    out_mat_path = os.path.join(variant_dir, "pca_weights.mat")
+    hdf5storage.savemat(
+        out_mat_path,
+        {"V": Vt[:pc].T, "mean": pca_pipeline.mean, "std": pca_pipeline.std},
+    )
+    return pca_pipeline
+
+
+def apply_pca_pipeline(
+    wav_features,
+    pc,
+    output_roots,
+    feature_name,
+    wav_noext_names,
+    pca_pipeline,
+    variant=None,
+    appendix="",
+):
+    if isinstance(output_roots, str):
+        # broadcast to list
+        output_roots = [output_roots] * len(wav_features)
+
+    feature = np.concatenate(wav_features, axis=0)
+    features_pc = pca_pipeline.transform(feature)
+    # split back to each wav
+    wav_features_pc = np.split(
+        features_pc,
+        np.cumsum([len(wav_feature) for wav_feature in wav_features])[:-1],
+        axis=0,
+    )
+    for wav_feature_pc, wav_name_no_ext, output_root in zip(
+        wav_features_pc, wav_noext_names, output_roots
+    ):
+        feature_dir = os.path.join(output_root, "features", feature_name)
+
         if variant is None:
             variant_dir = os.path.join(feature_dir, f"pc{pc}{appendix}")
         else:
             variant_dir = os.path.join(feature_dir, f"{variant}_pc{pc}{appendix}")
+
+        os.makedirs(variant_dir, exist_ok=True)
+        out_mat_path = os.path.join(variant_dir, f"{wav_name_no_ext}.mat")
+        out_meta_stimuli_path = os.path.join(variant_dir, f"{wav_name_no_ext}.txt")
+
         if not os.path.exists(variant_dir):
             os.makedirs(variant_dir)
-        out_mat_path = os.path.join(variant_dir, "pca_usv.mat")
-        hdf5storage.savemat(out_mat_path, {"U": U, "S": S, "Vt": Vt})
-        return pca_pipeline
+
+        # save data as mat
+        hdf5storage.savemat(out_mat_path, {"features": wav_feature_pc})
+
+        # generate meta file for cochleagram
+        with open(out_meta_stimuli_path, "w") as f:
+            f.write(f"The shape of this feature is {wav_feature_pc.shape}.")
+
+
+def generate_pca_pipeline_from_weights(
+    weights_from,
+    pc=None,
+):
+    # pc should be a number
+    weights_mat = hdf5storage.loadmat(weights_from)
+    V = weights_mat["V"]
+    mean = weights_mat["mean"]
+    std = weights_mat["std"]
+    if mean == 0:
+        demean = False
     else:
-        features_pc = pca_pipeline.transform(feature)
-        # split back to each wav
-        wav_features_pc = np.split(
-            features_pc,
-            np.cumsum([len(wav_feature) for wav_feature in wav_features])[:-1],
-            axis=0,
-        )
-        for wav_feature_pc, wav_name_no_ext, output_root in zip(
-            wav_features_pc, wav_noext_names, output_roots
-        ):
-            feature_dir = os.path.join(output_root, "features", feature_name)
-            meta_out_dir = os.path.join(output_root, "feature_metadata")
-            if not os.path.exists(meta_out_dir):
-                os.makedirs(meta_out_dir)
-            out_meta_feature_path = os.path.join(meta_out_dir, f"{feature_name}.txt")
-            if variant is None:
-                variant_dir = os.path.join(feature_dir, f"pc{pc}{appendix}")
-            else:
-                variant_dir = os.path.join(feature_dir, f"{variant}_pc{pc}{appendix}")
-            if not os.path.exists(variant_dir):
-                os.makedirs(variant_dir)
-            out_mat_path = os.path.join(variant_dir, f"{wav_name_no_ext}.mat")
-            out_meta_stimuli_path = os.path.join(variant_dir, f"{wav_name_no_ext}.txt")
+        demean = True
+    if std == 1:
+        std = False
+    else:
+        std = True
+    pc = V.shape[1] if pc is None else pc
+    pca_pipeline = PCA(n_components=pc, demean=demean, standardize=std)
+    pca_pipeline.load(mean, std, V)
 
-            if not os.path.exists(variant_dir):
-                os.makedirs(variant_dir)
-
-            # save data as mat
-            hdf5storage.savemat(out_mat_path, {"features": wav_feature_pc})
-
-            # generate meta file for cochleagram
-            with open(out_meta_stimuli_path, "w") as f:
-                f.write(f"The shape of this feature is {wav_feature_pc.shape}.")
-
-        with open(out_meta_feature_path, "w") as f:
-            f.write(
-                f"""Demean, then get first {pc} PCs using svd.
-Timestamps start from 0, sr=100Hz. You can find out the shape of each stimulus in features/feature_name/variant_name/stimuli.txt as (n_time,n_features). 
-The timing (in seconds) of each time stamp can be computed like: timing=np.arange(n_time)/sr."""
-            )
+    return pca_pipeline

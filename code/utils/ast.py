@@ -8,6 +8,7 @@ from transformers import AutoProcessor, AutoModel
 from collections import defaultdict
 import librosa
 from utils.pc import generate_pc
+from feature_extraction.code.utils.shared import write_summary
 
 
 def ast(device, output_root, stim_names, wav_dir, out_sr=100, pc=100, **kwargs):
@@ -58,16 +59,15 @@ def ast(device, output_root, stim_names, wav_dir, out_sr=100, pc=100, **kwargs):
 
 
 def generate_AST_features(
-    device, AST_model, wav_path, output_root, n_t=None, out_sr=100
+    device, AST_model, wav_path, output_root, n_t=None, out_sr=100, time_window=[-1, 1]
 ):
     wav_name = os.path.basename(wav_path)
     wav_name_no_ext = os.path.splitext(wav_name)[0]
     feature_class_out_dir = os.path.join(output_root, "features", "ast")
-    meta_out_path = os.path.join(output_root, "feature_metadata", "ast.txt")
+
     if not os.path.exists(feature_class_out_dir):
         os.makedirs(feature_class_out_dir)
-    if not os.path.exists(os.path.dirname(meta_out_path)):
-        os.makedirs(os.path.dirname(meta_out_path))
+
     waveform, sample_rate = torchaudio.load(wav_path)
     t_num_new = int(np.round(waveform.shape[1] / sample_rate * out_sr))
     if n_t is not None:
@@ -102,19 +102,14 @@ def generate_AST_features(
         out_mat_path = os.path.join(feature_variant_out_dir, f"{wav_name_no_ext}.mat")
 
         # save data as mat
-        hdf5storage.savemat(out_mat_path, {"features": feats})
+        hdf5storage.savemat(out_mat_path, {"features": feats, "t": t_new})
         # generate meta file for this layer
-        with open(
-            os.path.join(feature_variant_out_dir, f"{wav_name_no_ext}.txt"), "w"
-        ) as f:
-            f.write(f"""The shape of this layer is {feats.shape}.""")
 
-    # generate meta file for this feature
-    with open(meta_out_path, "w") as f:
-        f.write(
-            f"""AST features.
-Each layer is saved separately as variant. 
-Timestamps start from 0 ms, sr={out_sr}Hz. You can find out the shape of each stimulus in features/ast/<layer>/<stimuli>.txt as (n_time,n_feature)."""
+        write_summary(
+            feature_variant_out_dir,
+            time_window=f"{abs(time_window[0])} second before to {abs(time_window[1])} second after",
+            dimensions="[time, feature]",
+            extra="Nothing",
         )
 
 

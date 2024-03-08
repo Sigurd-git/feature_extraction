@@ -400,21 +400,29 @@ for i = 1:n_model_features
             load([feature_directories{i} '/' model_features{i} '_' fname '.mat'], 'F', 'P');
             dims = size(F);
             F = reshape(F, dims(1), prod(dims(2:end)));
-            
+            N_all = N_all + size(F,1);
             % initialize
             if j == 1
                 C = zeros(size(F,2));
                 M = zeros(1,size(F,2));
+                if strcmp(P_orig.device, 'gpu')
+                    C = gpuArray(C);
+                    M = gpuArray(M);
+                end
             end
-            
+            if strcmp(P_orig.device, 'gpu')
+                F = gpuArray(F);
+            end
             % accumulate correlation, sum, and total number of samples
             C = C + F' * F;
             M = M + sum(F);
-            N_all = N_all + size(F,1);
+            
             assert(all(isreal(C)))
             
         end
-        
+        if strcmp(P_orig.device, 'gpu')
+            N_all = gpuArray(N_all);
+        end
         % normalize by number of samples
         C = C/N_all;
         M = M/N_all;
@@ -437,7 +445,10 @@ for i = 1:n_model_features
         
         % eigenvectors of covariance
         [pca_weights, pca_eigvals] = eig(CV);
-        
+        if strcmp(P_orig.device, 'gpu')
+            pca_weights = gather(pca_weights);
+            pca_eigvals = gather(pca_eigvals);
+        end
         % sort by variance
         pca_eigvals = diag(pca_eigvals);
         [~, xi] = sort(pca_eigvals, 'descend');

@@ -1,3 +1,6 @@
 [submodule "sam_code_workspace/general-analysis-code"]
 	path = sam_code_workspace/general-analysis-code
 	url = git@github.com:snormanhaignere/general-analysis-code.git
+[submodule "audio_tools"]
+	path = audio_tools
+	url = git@github.com:HamiltonLabUT/audio_tools.git

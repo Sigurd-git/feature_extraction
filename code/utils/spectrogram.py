@@ -1,16 +1,16 @@
-import librosa
 import os
 import hdf5storage
 import importlib
 import numpy as np
-from utils.pc import generate_pc
+from utils.pc import generate_pca_pipeline, apply_pca_pipeline
+from feature_extraction.code.utils.shared import write_summary, prepare_waveform
 
 # from audio_tools import get_mel_spectrogram using importlib
 import importlib.util
 import sys
 
 # Define the path to the module
-module_path = "/home/gliao2/snormanh_lab_shared/code/audio_tools/audio_tools.py"
+module_path = os.path.abspath(f"{__file__}/../../../audio_tools/audio_tools.py")
 
 # Add the directory containing the module to sys.path
 module_dir = os.path.dirname(module_path)
@@ -24,51 +24,58 @@ spec.loader.exec_module(audio_tools)
 
 
 # stim_names, output_root, wav_dir, out_sr, pc
-def generate_spectrogram_features(out_sr, nfilts, wav_path, output_root, n_t=None):
+def generate_spectrogram_features(
+    out_sr, nfilts, wav_path, output_root, n_t=None, time_window=[-1, 1]
+):
     print(f"Getting mel spectrogram for stim: {wav_path}")
-    wav_name = os.path.basename(wav_path)
-    wav_name_no_ext = os.path.splitext(wav_name)[0]
-    feature_class_out_dir = os.path.join(output_root, "features", "spectrogram")
-    meta_out_path = os.path.join(output_root, "feature_metadata", "spectrogram.txt")
-    if not os.path.exists(feature_class_out_dir):
-        os.makedirs(feature_class_out_dir)
-    if not os.path.exists(os.path.dirname(meta_out_path)):
-        os.makedirs(os.path.dirname(meta_out_path))
-    audio_waveform, aud_fs = librosa.load(wav_path, sr=None)
-    t_num_new = int(np.round(audio_waveform.shape[0] / aud_fs * out_sr))
-    if n_t is not None:
-        t_new = np.arange(n_t) / out_sr
-    else:
-        t_new = np.arange(t_num_new) / out_sr
-    t_num_new = len(t_new)
-    # pad audio_waveform about 10/100 seconds
-    audio_waveform = np.pad(audio_waveform, (0, int(10 / out_sr * aud_fs)), "constant")
+    (
+        wav_name_no_ext,
+        waveform,
+        sample_rate,
+        t_num_new,
+        t_new,
+        feature_variant_out_dir,
+    ) = prepare_waveform(out_sr, wav_path, output_root, n_t, time_window)
+
+    # pad waveform about 10/100 seconds
+    waveform = np.pad(waveform, (0, int(10 / out_sr * sample_rate)), "constant")
     mel_spectrogram, freqs = audio_tools.get_mel_spectrogram(
-        audio_waveform, aud_fs, steptime=1 / out_sr, nfilts=nfilts
+        waveform, sample_rate, steptime=1 / out_sr, nfilts=nfilts
     )
     mel_spectrogram = mel_spectrogram[:, :t_num_new].T
-    feature_variant_out_dir = os.path.join(feature_class_out_dir, "original")
 
-    if not os.path.exists(feature_variant_out_dir):
-        os.makedirs(feature_variant_out_dir)
     # save each layer as mat
     out_mat_path = os.path.join(feature_variant_out_dir, f"{wav_name_no_ext}.mat")
 
-    # save data as mat
-    hdf5storage.savemat(out_mat_path, {"features": mel_spectrogram})
+    hdf5storage.savemat(
+        out_mat_path, {"features": mel_spectrogram, "t": t_new + time_window[0]}
+    )
+
     # generate meta file for this layer
-    with open(
-        os.path.join(feature_variant_out_dir, f"{wav_name_no_ext}.txt"), "w"
-    ) as f:
-        f.write(f"""The shape of liberty spectrogram is {mel_spectrogram.shape}.""")
-    pass
+    write_summary(
+        feature_variant_out_dir,
+        time_window=f"{abs(time_window[0])} second before to {abs(time_window[1])} second after",
+        dimensions="[time, feature]",
+        extra="Nothing",
+    )
 
 
-def spectrogram(device, output_root, stim_names, wav_dir, out_sr=100, pc=100, **kwargs):
+def spectrogram(
+    device,
+    output_root,
+    stim_names,
+    wav_dir,
+    out_sr=100,
+    pc=100,
+    time_window=[-1, 1],
+    **kwargs,
+):
     nfilts = kwargs.get("nfilts", 80)
     for stim_index, stim_name in enumerate(stim_names):
         wav_path = os.path.join(wav_dir, f"{stim_name}.wav")
-        generate_spectrogram_features(out_sr, nfilts, wav_path, output_root)
+        generate_spectrogram_features(
+            out_sr, nfilts, wav_path, output_root, time_window=time_window
+        )
 
     if pc < nfilts:
         feature_name = "spectrogram"
@@ -80,23 +87,21 @@ def spectrogram(device, output_root, stim_names, wav_dir, out_sr=100, pc=100, **
             )
             feature = hdf5storage.loadmat(feature_path)["features"]
             wav_features.append(feature)
-        pca_pipeline = generate_pc(
+
+        pca_pipeline = generate_pca_pipeline(
             wav_features,
             pc,
             output_root,
             feature_name,
-            stim_names,
             demean=True,
             std=False,
         )
-        generate_pc(
+        apply_pca_pipeline(
             wav_features,
             pc,
             output_root,
             feature_name,
             stim_names,
-            demean=True,
-            std=False,
             pca_pipeline=pca_pipeline,
         )
 
@@ -104,13 +109,13 @@ def spectrogram(device, output_root, stim_names, wav_dir, out_sr=100, pc=100, **
 if __name__ == "__main__":
     sr = 100
     nfilts = 80  # How many mel bands to return
-    project = "syllable-invariances_v2"
-    mat = hdf5storage.loadmat(
-        f"/home/gliao2/snormanh_lab_shared/projects/{project}/stimuli/stim_names.mat"
+    project = "intracranial-natsound165"
+    wav_path = os.path.abspath(
+        f"{__file__}/../../../projects_toy/intracranial-natsound165/stimuli/stimulus_audio/stim5_alarm_clock.wav"
     )
-    stim_names = np.array([cell[0] for cell in mat["stim_names"].reshape(-1)])
-    # remove random-durmatched-order1 from stim_names
-    index = np.where(stim_names == "random-durmatched-order1")[0][0]
-    stim_names = np.delete(stim_names, index)
-    output_root = f"/scratch/snormanh_lab/shared/projects/{project}/analysis"
-    wav_dir = f"/scratch/snormanh_lab/shared/projects/{project}/stimuli/stimulus_audio"
+    output_root = os.path.abspath(
+        f"{__file__}/../../../projects_toy/{project}/analysis"
+    )
+    generate_spectrogram_features(
+        sr, nfilts, wav_path, output_root, n_t=None, time_window=[-1, 1]
+    )
