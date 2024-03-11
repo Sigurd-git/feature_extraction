@@ -57,62 +57,80 @@ def main(cfg):
         from utils.ast import ast
 
         ast(
-            args_dict.device,
-            args_dict.output_root,
-            args_dict.stim_names,
-            args_dict.wav_dir,
+            device=args_dict.device,
+            output_root=args_dict.output_root,
+            stim_names=args_dict.stim_names,
+            wav_dir=args_dict.wav_dir,
             out_sr=args_dict.out_sr,
             pc=args_dict.pc,
+            time_window=args_dict.time_window,
         )
     elif args_dict.feature == "cochdnn":
         from utils.cochdnn import cochdnn
 
         cochdnn(
-            args_dict.device,
-            args_dict.output_root,
-            args_dict.stim_names,
-            args_dict.wav_dir,
+            device=args_dict.device,
+            output_root=args_dict.output_root,
+            stim_names=args_dict.stim_names,
+            wav_dir=args_dict.wav_dir,
             out_sr=args_dict.out_sr,
             pc=args_dict.pc,
+            time_window=args_dict.time_window,
         )
     elif args_dict.feature == "cochleagram_spectrotemporal":
         from utils.cochleagram_spectrotemporal import cochleagram_spectrotemporal
 
         cochleagram_spectrotemporal(
-            args_dict.device,
-            args_dict.output_root,
-            args_dict.stim_names,
-            args_dict.wav_dir,
+            device=args_dict.device,
+            output_root=args_dict.output_root,
+            stim_names=args_dict.stim_names,
+            wav_dir=args_dict.wav_dir,
             out_sr=args_dict.out_sr,
             pc=args_dict.pc,
             modulation_type=args_dict.spectrotemporal.modulation_type,
             nonlin=args_dict.spectrotemporal.nonlin,
+            time_window=args_dict.time_window,
         )
     elif args_dict.feature == "cochresnet":
         from utils.cochresnet import cochresnet
 
         cochresnet(
-            args_dict.device,
-            args_dict.output_root,
-            args_dict.stim_names,
-            args_dict.wav_dir,
+            device=args_dict.device,
+            output_root=args_dict.output_root,
+            stim_names=args_dict.stim_names,
+            wav_dir=args_dict.wav_dir,
             out_sr=args_dict.out_sr,
             pc=args_dict.pc,
+            time_window=args_dict.time_window,
+        )
+    elif args_dict.feature == "hubert":
+        from utils.hubert import hubert
+
+        hubert(
+            device=args_dict.device,
+            output_root=args_dict.output_root,
+            stim_names=args_dict.stim_names,
+            wav_dir=args_dict.wav_dir,
+            out_sr=args_dict.out_sr,
+            pc=args_dict.pc,
+            time_window=args_dict.time_window,
         )
     elif args_dict.feature == "spectrogram":
         from utils.spectrogram import spectrogram
 
         spectrogram(
-            args_dict.device,
-            args_dict.output_root,
-            args_dict.stim_names,
-            args_dict.wav_dir,
+            device=args_dict.device,
+            output_root=args_dict.output_root,
+            stim_names=args_dict.stim_names,
+            wav_dir=args_dict.wav_dir,
             out_sr=args_dict.out_sr,
             pc=args_dict.pc,
             nfilts=args_dict.spectrogram.nfilts,
+            time_window=args_dict.time_window,
         )
         pass
-    pass
+    else:
+        assert False, "Feature not implemented. Exiting."
 
 
 if __name__ == "__main__":

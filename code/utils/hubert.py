@@ -5,11 +5,12 @@ import torch
 import torchaudio
 from general_analysis_code.preprocess import align_time
 from utils.hook import register_activation_hooks, remove_hooks
-from utils.pc import generate_pc
+from utils.pc import generate_pca_pipeline, apply_pca_pipeline
+from utils.shared import write_summary, prepare_waveform
 
 
 def generate_HUBERT_features(
-    device, HUBERT_model, wav_path, output_root, n_t, out_sr=100
+    device, HUBERT_model, wav_path, output_root, n_t, out_sr=100, time_window=[-1, 1]
 ):
     """
     This function generates HUBERT features for a given audio file.
@@ -39,20 +40,19 @@ def generate_HUBERT_features(
         conv7: (119.5+279.5)/2, (439.5+599.5)/2, ... = 199.5, 519.5, ... stride=2, kernel=2
     """
 
-    wav_name = os.path.basename(wav_path)
-    wav_name_no_ext = os.path.splitext(wav_name)[0]
-    feature_class_out_dir = os.path.join(output_root, "features", "hubert")
-    meta_out_path = os.path.join(output_root, "feature_metadata", "hubert.txt")
-    if not os.path.exists(feature_class_out_dir):
-        os.makedirs(feature_class_out_dir)
-    if not os.path.exists(os.path.dirname(meta_out_path)):
-        os.makedirs(os.path.dirname(meta_out_path))
-    waveform, sample_rate = torchaudio.load(wav_path)
-    t_num_new = int(np.round(waveform.shape[1] / sample_rate * out_sr))
-    if n_t is not None:
-        t_new = np.arange(n_t) / out_sr
-    else:
-        t_new = np.arange(t_num_new) / out_sr
+    feature = "hubert"
+    variants = [f"layer{i}" for i in range(19)]
+    (
+        wav_name_no_ext,
+        waveform,
+        sample_rate,
+        t_num_new,
+        t_new,
+        feature_variant_out_dirs,
+    ) = prepare_waveform(
+        out_sr, wav_path, output_root, n_t, time_window, feature, variants
+    )
+    waveform = torch.as_tensor(waveform)
     waveform = waveform.to(device)
     HUBERT_bundle = torchaudio.pipelines.HUBERT_BASE  #    HUBERT_bundle (HUBERTBundle): The HUBERT bundle containing the sample rate and other information.
     conv_kernels = [i[1] for i in HUBERT_bundle._params["extractor_conv_layer_config"]]
@@ -68,6 +68,7 @@ def generate_HUBERT_features(
     waveform = torch.nn.functional.pad(
         waveform, (pad_number, pad_number), "constant", 0
     )
+    waveform = waveform.reshape(1, -1)
     hooks, activations = register_activation_hooks(HUBERT_model)
     with torch.inference_mode():
         features, _ = HUBERT_model.extract_features(waveform)
@@ -81,9 +82,7 @@ def generate_HUBERT_features(
         t_0 = t_0 + (conv_kernels[i] - 1) / (2 * sr)
         sr = sr / conv_strides[i]
         print(f"t_0_{i}={t_0}, sr_{i}={sr}")
-        feature_variant_out_dir = os.path.join(feature_class_out_dir, f"layer{i}")
-        if not os.path.exists(feature_variant_out_dir):
-            os.makedirs(feature_variant_out_dir)
+        feature_variant_out_dir = feature_variant_out_dirs[i]
         feats = feats[0][0].squeeze(0)
         feats = feats.cpu().numpy().transpose()
         ### align time to start from 0 and make the length to be n_t
@@ -97,19 +96,14 @@ def generate_HUBERT_features(
         out_mat_path = os.path.join(feature_variant_out_dir, f"{wav_name_no_ext}.mat")
 
         # save data as mat
-        hdf5storage.savemat(out_mat_path, {"features": feats})
-        # generate meta file for this layer
-        with open(
-            os.path.join(feature_variant_out_dir, f"{wav_name_no_ext}.txt"), "w"
-        ) as f:
-            f.write(f"""The shape of this conv layer is {feats.shape}.""")
+        hdf5storage.savemat(
+            out_mat_path, {"features": feats, "t": t_new + time_window[0]}
+        )
 
     for j, feats in enumerate(features):
         index = i + j + 1
 
-        feature_variant_out_dir = os.path.join(feature_class_out_dir, f"layer{index}")
-        if not os.path.exists(feature_variant_out_dir):
-            os.makedirs(feature_variant_out_dir)
+        feature_variant_out_dir = feature_variant_out_dirs[index]
         feats = feats.squeeze(0)
         feats = feats.cpu().numpy()
         ### align time to start from 0 and make the length to be n_t
@@ -122,28 +116,27 @@ def generate_HUBERT_features(
         out_mat_path = os.path.join(feature_variant_out_dir, f"{wav_name_no_ext}.mat")
 
         # save data as mat
-        hdf5storage.savemat(out_mat_path, {"features": feats})
-        # generate meta file for this layer
-        with open(
-            os.path.join(feature_variant_out_dir, f"{wav_name_no_ext}.txt"), "w"
-        ) as f:
-            f.write(f"""The shape of this transformer layer is {feats.shape}.""")
-
-    # generate meta file for this feature
-    with open(meta_out_path, "w") as f:
-        f.write(
-            """HuBert features.
-Each layer is saved separately as variant. 
-Timestamps start from 0 ms, sr=100Hz. You can find out the shape of each stimulus in features/hubert/<layer>/<stimuli>.txt as (n_time,n_feature). 
-The timing (in seconds) of each time stamp can be computed like: timing=np.arange(n_time)/sr.
-conv_stride = (5, 2, 2, 2, 2, 2, 2) and conv_kernel = (10, 3, 3, 3 ,3 ,2 ,2), no padding for the convolusion layers.
-There are 7 conv layers and 12 transformer layers.
-
-"""
+        hdf5storage.savemat(
+            out_mat_path, {"features": feats, "t": t_new + time_window[0]}
         )
+    write_summary(
+        feature_variant_out_dir,
+        time_window=f"{abs(time_window[0])} second before to {abs(time_window[1])} second after",
+        dimensions="[time, feature]",
+        extra="Nothing",
+    )
 
 
-def hubert(device, stim_names, output_root, wav_dir, sr=100, pc=100, **kwargs):
+def hubert(
+    device,
+    output_root,
+    stim_names,
+    wav_dir,
+    out_sr=100,
+    pc=100,
+    time_window=[-1, 1],
+    **kwargs,
+):
     compile_torch = kwargs.get("compile_torch", True)
     # TODO: Use large finetuned model
     HUBERT_bundle = torchaudio.pipelines.HUBERT_BASE
@@ -153,39 +146,56 @@ def hubert(device, stim_names, output_root, wav_dir, sr=100, pc=100, **kwargs):
     for stim_index, stim_name in enumerate(stim_names):
         wav_path = os.path.join(wav_dir, f"{stim_name}.wav")
         generate_HUBERT_features(
-            device, HUBERT_model, wav_path, output_root, n_t=None, out_sr=sr
+            device,
+            HUBERT_model,
+            wav_path,
+            output_root,
+            n_t=None,
+            out_sr=out_sr,
+            time_window=time_window,
         )
 
     # compute PC of hubert features
     feature_name = "hubert"
     layer_num = 19
-    for layer in range(layer_num):
-        wav_features = []
-        for stim_index, stim_name in enumerate(stim_names):
-            wav_path = os.path.join(wav_dir, f"{stim_name}.wav")
-            feature_path = (
-                f"{output_root}/features/{feature_name}/layer{layer}/{stim_name}.mat"
+    if pc is not None:
+        for layer in range(layer_num):
+            wav_features = []
+            for stim_index, stim_name in enumerate(stim_names):
+                wav_path = os.path.join(wav_dir, f"{stim_name}.wav")
+                feature_path = f"{output_root}/features/{feature_name}/layer{layer}/{stim_name}.mat"
+                feature = hdf5storage.loadmat(feature_path)["features"]
+                wav_features.append(feature)
+            print(f"Start computing PCs for {feature_name} layer {layer}")
+            pca_pipeline = generate_pca_pipeline(
+                wav_features,
+                pc,
+                output_root,
+                feature_name,
+                demean=True,
+                std=False,
+                variant=f"layer{layer}",
             )
-            feature = hdf5storage.loadmat(feature_path)["features"]
-            wav_features.append(feature)
-        pca_pipeline = generate_pc(
-            wav_features,
-            pc,
-            output_root,
-            feature_name,
-            stim_names,
-            demean=True,
-            std=False,
-            variant=f"layer{layer}",
-        )
-        generate_pc(
-            wav_features,
-            pc,
-            output_root,
-            feature_name,
-            stim_names,
-            demean=True,
-            std=False,
-            variant=f"layer{layer}",
-            pca_pipeline=pca_pipeline,
-        )
+            feature_variant_out_dir = apply_pca_pipeline(
+                wav_features,
+                pc,
+                output_root,
+                feature_name,
+                stim_names,
+                variant=f"layer{layer}",
+                pca_pipeline=pca_pipeline,
+                time_window=time_window,
+            )
+
+
+if __name__ == "__main__":
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    project = "intracranial-natsound165"
+    output_root = os.path.abspath(
+        f"{__file__}/../../../projects_toy/{project}/analysis"
+    )
+    wav_dir = os.path.abspath(
+        f"{__file__}/../../../projects_toy/intracranial-natsound165/stimuli/stimulus_audio"
+    )
+    stim_names = ["stim5_alarm_clock"]
+    hubert(device, output_root, stim_names, wav_dir, out_sr=100, pc=100)

@@ -10,6 +10,7 @@ def write_summary(
     time_window="1 second before to 1 second after",
     dimensions="[time, feature]",
     extra="Nothing",
+    url="https://github.com/Sigurd-git/feature_extraction/tree/main/code/utils",
     parameter_dict=None,
 ):
     meta_out_dir = os.path.join(feature_variant_out_dir, "metadata")
@@ -21,6 +22,7 @@ def write_summary(
         f.write(
             f"""Time window: {time_window};
 The dimensions of the matrices: {dimensions};
+Code used to generate those features are here: {url};
 Extra comments: {extra}."""
         )
     if parameter_dict is not None:
@@ -32,12 +34,17 @@ Extra comments: {extra}."""
         hdf5storage.savemat(parameter_out_path, parameter_dict)
 
 
-def prepare_waveform(out_sr, wav_path, output_root, n_t, time_window):
+def prepare_waveform(
+    out_sr, wav_path, output_root, n_t, time_window, feature, variants
+):
     wav_name = os.path.basename(wav_path)
     wav_name_no_ext = os.path.splitext(wav_name)[0]
-    feature = "spectrogram"
-    variant = "original"
-    feature_variant_out_dir = create_feature_variant_dir(output_root, feature, variant)
+    print(f"Getting {feature} features for stim: {wav_path}")
+    feature_variant_out_dirs = [
+        create_feature_variant_dir(output_root, feature, variant)[1]
+        for variant in variants
+    ]
+
     waveform, sample_rate = torchaudio.load(wav_path)
     waveform = waveform.reshape(-1)
     # pad waveform according to time_window
@@ -59,7 +66,7 @@ def prepare_waveform(out_sr, wav_path, output_root, n_t, time_window):
         sample_rate,
         t_num_new,
         t_new,
-        feature_variant_out_dir,
+        feature_variant_out_dirs,
     )
 
 

@@ -7,11 +7,20 @@ from general_analysis_code.preprocess import align_time
 from transformers import AutoProcessor, AutoModel
 from collections import defaultdict
 import librosa
-from utils.pc import generate_pc
-from feature_extraction.code.utils.shared import write_summary
+from utils.pc import generate_pca_pipeline, apply_pca_pipeline
+from utils.shared import write_summary, prepare_waveform
 
 
-def ast(device, output_root, stim_names, wav_dir, out_sr=100, pc=100, **kwargs):
+def ast(
+    device,
+    output_root,
+    stim_names,
+    wav_dir,
+    out_sr=100,
+    pc=100,
+    time_window=[-1, 1],
+    **kwargs,
+):
     AST_model = AutoModel.from_pretrained("MIT/ast-finetuned-audioset-10-10-0.4593").to(
         device
     )
@@ -19,77 +28,78 @@ def ast(device, output_root, stim_names, wav_dir, out_sr=100, pc=100, **kwargs):
     for stim_index, stim_name in enumerate(stim_names):
         wav_path = os.path.join(wav_dir, f"{stim_name}.wav")
         generate_AST_features(
-            device, AST_model, wav_path, output_root, n_t=None, out_sr=out_sr
+            device,
+            AST_model,
+            wav_path,
+            output_root,
+            n_t=None,
+            out_sr=out_sr,
+            time_window=time_window,
         )
 
     # compute PC of ast features
     feature_name = "ast"
     layer_num = 14
-    for layer in range(layer_num):
-        wav_features = []
-        for stim_index, stim_name in enumerate(stim_names):
-            wav_path = os.path.join(wav_dir, f"{stim_name}.wav")
-            feature_path = (
-                f"{output_root}/features/{feature_name}/layer{layer}/{stim_name}.mat"
-            )
-            feature = hdf5storage.loadmat(feature_path)["features"]
-            wav_features.append(feature)
-        if pc is not None:
-            pca_pipeline = generate_pc(
+    if pc is not None:
+        for layer in range(layer_num):
+            wav_features = []
+            for stim_index, stim_name in enumerate(stim_names):
+                wav_path = os.path.join(wav_dir, f"{stim_name}.wav")
+                feature_path = f"{output_root}/features/{feature_name}/layer{layer}/{stim_name}.mat"
+                feature = hdf5storage.loadmat(feature_path)["features"]
+                wav_features.append(feature)
+            print(f"Start computing PCs for {feature_name} layer {layer}")
+            pca_pipeline = generate_pca_pipeline(
                 wav_features,
                 pc,
                 output_root,
                 feature_name,
-                stim_names,
                 demean=True,
                 std=False,
                 variant=f"layer{layer}",
             )
-            generate_pc(
+            feature_variant_out_dir = apply_pca_pipeline(
                 wav_features,
                 pc,
                 output_root,
                 feature_name,
                 stim_names,
-                demean=True,
-                std=False,
                 variant=f"layer{layer}",
                 pca_pipeline=pca_pipeline,
+                time_window=time_window,
             )
 
 
 def generate_AST_features(
     device, AST_model, wav_path, output_root, n_t=None, out_sr=100, time_window=[-1, 1]
 ):
-    wav_name = os.path.basename(wav_path)
-    wav_name_no_ext = os.path.splitext(wav_name)[0]
-    feature_class_out_dir = os.path.join(output_root, "features", "ast")
+    feature = "ast"
+    variants = [f"layer{i}" for i in range(14)]
+    (
+        wav_name_no_ext,
+        waveform,
+        sample_rate,
+        t_num_new,
+        t_new,
+        feature_variant_out_dirs,
+    ) = prepare_waveform(
+        out_sr, wav_path, output_root, n_t, time_window, feature, variants
+    )
 
-    if not os.path.exists(feature_class_out_dir):
-        os.makedirs(feature_class_out_dir)
-
-    waveform, sample_rate = torchaudio.load(wav_path)
-    t_num_new = int(np.round(waveform.shape[1] / sample_rate * out_sr))
-    if n_t is not None:
-        t_new = np.arange(n_t) / out_sr
-    else:
-        t_new = np.arange(t_num_new) / out_sr
     # pad the waveform to cover 0
     t_0s = [0.01246875] + [0.08746875] * 13
     srs = [100] + [10] * 13
     before_pad_number = int(np.max(t_0s) * sample_rate) + 1
-    after_pad_number = 160000
+    after_pad_number = 160000 * 3
     t_0s = np.array(t_0s) - before_pad_number / sample_rate
+    waveform = torch.as_tensor(waveform)
     waveform = torch.nn.functional.pad(waveform, (before_pad_number, after_pad_number))
     outputs = extract_AST(device, AST_model, waveform, sample_rate)
-
     for i, (feats, t_0, sr) in enumerate(zip(outputs, t_0s, srs)):
         # The start time of output of layer n is: t_0_{n+1} = t_0_{n} + (conv_kernel_{n}-1) / (2*sr_{n})
         # The sr of output of layer n is: sr_{n+1} = sr_{n} / conv_stride_{n}
         print(f"t_0_{i}={t_0}, sr_{i}={sr}")
-        feature_variant_out_dir = os.path.join(feature_class_out_dir, f"layer{i}")
-        if not os.path.exists(feature_variant_out_dir):
-            os.makedirs(feature_variant_out_dir)
+
         feats = feats.cpu().numpy()
         ### align time to start from 0 and make the length to be n_t
         t_length = feats.shape[0]
@@ -97,20 +107,22 @@ def generate_AST_features(
 
         feats = align_time(feats, t_origin, t_new, "t f")
         print(f"Feature {i}: {feats.shape}")
-
+        feature_variant_out_dir = feature_variant_out_dirs[i]
         # save each layer as mat
         out_mat_path = os.path.join(feature_variant_out_dir, f"{wav_name_no_ext}.mat")
 
         # save data as mat
-        hdf5storage.savemat(out_mat_path, {"features": feats, "t": t_new})
+        hdf5storage.savemat(
+            out_mat_path, {"features": feats, "t": t_new + time_window[0]}
+        )
         # generate meta file for this layer
 
-        write_summary(
-            feature_variant_out_dir,
-            time_window=f"{abs(time_window[0])} second before to {abs(time_window[1])} second after",
-            dimensions="[time, feature]",
-            extra="Nothing",
-        )
+    write_summary(
+        feature_variant_out_dir,
+        time_window=f"{abs(time_window[0])} second before to {abs(time_window[1])} second after",
+        dimensions="[time, feature]",
+        extra="Nothing",
+    )
 
 
 def process_waveform(waveform, kernel=163840, stride=81920):
@@ -232,7 +244,12 @@ if __name__ == "__main__":
     model = AutoModel.from_pretrained("MIT/ast-finetuned-audioset-10-10-0.4593").to(
         device
     )
-    waveform = torch.randn(163840)
-    sample_rate = 16000
-    outputs = extract_AST(device, model, waveform, sample_rate)
-    print("\033[91m" + "outputs: " + "\033[92m", outputs)
+    project = "intracranial-natsound165"
+    output_root = os.path.abspath(
+        f"{__file__}/../../../projects_toy/{project}/analysis"
+    )
+    wav_dir = os.path.abspath(
+        f"{__file__}/../../../projects_toy/intracranial-natsound165/stimuli/stimulus_audio"
+    )
+    stim_names = ["stim5_alarm_clock"]
+    ast(device, output_root, stim_names, wav_dir, out_sr=100, pc=100)

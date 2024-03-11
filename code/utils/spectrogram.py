@@ -3,7 +3,7 @@ import hdf5storage
 import importlib
 import numpy as np
 from utils.pc import generate_pca_pipeline, apply_pca_pipeline
-from feature_extraction.code.utils.shared import write_summary, prepare_waveform
+from utils.shared import write_summary, prepare_waveform
 
 # from audio_tools import get_mel_spectrogram using importlib
 import importlib.util
@@ -27,16 +27,19 @@ spec.loader.exec_module(audio_tools)
 def generate_spectrogram_features(
     out_sr, nfilts, wav_path, output_root, n_t=None, time_window=[-1, 1]
 ):
-    print(f"Getting mel spectrogram for stim: {wav_path}")
+    feature = "spectrogram"
+    variant = "original"
     (
         wav_name_no_ext,
         waveform,
         sample_rate,
         t_num_new,
         t_new,
-        feature_variant_out_dir,
-    ) = prepare_waveform(out_sr, wav_path, output_root, n_t, time_window)
-
+        feature_variant_out_dirs,
+    ) = prepare_waveform(
+        out_sr, wav_path, output_root, n_t, time_window, feature, [variant]
+    )
+    feature_variant_out_dir = feature_variant_out_dirs[0]
     # pad waveform about 10/100 seconds
     waveform = np.pad(waveform, (0, int(10 / out_sr * sample_rate)), "constant")
     mel_spectrogram, freqs = audio_tools.get_mel_spectrogram(

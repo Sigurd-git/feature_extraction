@@ -40,13 +40,14 @@ P.device = device;
 
 % directory with the original stories and corresponding file names
 fnames = strcat(stim_names, '.wav');
+
+jobID = getenv('SLURM_JOB_ID');
 %% 
 
-% make a temporal working directory according to nowtime in the project_directory
-nowtime = datestr(now, 'HHMMSS');
-temp_dir = [project_directory '/temp_'  nowtime '/wavs'];
-if ~exist(temp_dir, 'dir')
-    mkdir(temp_dir);
+temp_dir = [project_directory '/temp_'  jobID];
+wav_temp_dir = [temp_dir '/wav'];
+if ~exist(wav_temp_dir, 'dir')
+    mkdir(wav_temp_dir);
 end
 
 before = abs(time_window(1));
@@ -56,15 +57,15 @@ after = abs(time_window(2));
 for i = 1:length(fnames)
     [wav, sr] = audioread([wav_dir '/' fnames{i}]);
     wav = [zeros(before*sr,1); wav; zeros(after*sr,1)];
-    output_file = [temp_dir '/' fnames{i}];
+    output_file = [wav_temp_dir '/' fnames{i}];
     audiowrite(mkpdir(output_file), wav, sr);
 end
 %% 
 
 % compute features and get PCs
-feature_directory = [project_directory '/temp_' nowtime '/spectemp-with-padding'];
+feature_directory = [temp_dir '/spectemp-with-padding'];
 [pca_timecourse_MAT_files, pca_weight_MAT_files, model_features, pca_timecourses_allstim_allmodels, coch_output_directory, modulation_output_directory, pca_output_directories] = allfeats_pca_multistim(...
-    modulation_types, fnames, nPCs, feature_sr, temp_dir, feature_directory, P);
+    modulation_types, fnames, nPCs, feature_sr, wav_temp_dir, feature_directory, P);
 
 
 end

@@ -1,14 +1,14 @@
 #!/bin/bash
 #SBATCH -p doppelbock -t 04:00:00
-#SBATCH -c 10
+#SBATCH -c 8
 #SBATCH -a 0-13
 #SBATCH --mem=128G
 #SBATCH --gres=gpu:1 -x bhg0044,bhg0046,bhg0047,bhg0048
-#SBATCH -o /scratch/snormanh_lab/shared/projects/syllable-invariances_v2/analysis/logs/%a.txt
+#SBATCH -o /scratch/snormanh_lab/shared/projects/intracranial-natsound165/analysis/logs/%a.txt
 #SBATCH --mail-type=BEGIN,END,FAIL
 #SBATCH --mail-user=guoyang_liao@urmc.rochester.edu
 
-project=syllable-invariances_v2
+project='intracranial-natsound165'
 
 non_list=(modulus real rect)
 modulation_list=(spectempmod specmod tempmod)

@@ -15,6 +15,7 @@ env:
     modulation_type: "tempmod"
     nonlin: "modulus"
   stim_names: ""
+  time_window: [-1,1]
 
 hydra:
   run:

@@ -2,6 +2,7 @@ from scipy.linalg import svd
 import hdf5storage
 import numpy as np
 import os
+from utils.shared import write_summary
 
 
 class PCA:
@@ -108,9 +109,9 @@ def generate_pca_pipeline(
     pc,
     output_roots,
     feature_name,
+    variant,
     demean=True,
     std=False,
-    variant=None,
     appendix="",
 ):
     # pc should be a number
@@ -128,10 +129,7 @@ def generate_pca_pipeline(
     # asser output_roots are all the same
     assert np.all([output_root == output_roots[0] for output_root in output_roots])
     feature_dir = os.path.join(output_roots[0], "features", feature_name)
-    if variant is None:
-        variant_dir = os.path.join(feature_dir, f"pc{pc}{appendix}")
-    else:
-        variant_dir = os.path.join(feature_dir, f"{variant}_pc{pc}{appendix}")
+    variant_dir = os.path.join(feature_dir, f"{variant}{appendix}")
 
     os.makedirs(variant_dir, exist_ok=True)
     out_mat_path = os.path.join(variant_dir, "pca_weights.mat")
@@ -145,17 +143,28 @@ def generate_pca_pipeline(
 def apply_pca_pipeline(
     wav_features,
     pc,
-    output_roots,
+    output_root,
     feature_name,
     wav_noext_names,
     pca_pipeline,
     variant=None,
     appendix="",
+    time_window=[-1, 1],
 ):
-    if isinstance(output_roots, str):
-        # broadcast to list
-        output_roots = [output_roots] * len(wav_features)
+    feature_dir = os.path.join(output_root, "features", feature_name)
 
+    if variant is None:
+        variant_dir = os.path.join(feature_dir, f"pc{pc}{appendix}")
+    else:
+        variant_dir = os.path.join(feature_dir, f"{variant}_pc{pc}{appendix}")
+
+    os.makedirs(variant_dir, exist_ok=True)
+    out_mat_path = os.path.join(variant_dir, "pca_weights.mat")
+    Vt = pca_pipeline.Vt
+    hdf5storage.savemat(
+        out_mat_path,
+        {"V": Vt[:pc].T, "mean": pca_pipeline.mean, "std": pca_pipeline.std},
+    )
     feature = np.concatenate(wav_features, axis=0)
     features_pc = pca_pipeline.transform(feature)
     # split back to each wav
@@ -164,29 +173,21 @@ def apply_pca_pipeline(
         np.cumsum([len(wav_feature) for wav_feature in wav_features])[:-1],
         axis=0,
     )
-    for wav_feature_pc, wav_name_no_ext, output_root in zip(
-        wav_features_pc, wav_noext_names, output_roots
-    ):
-        feature_dir = os.path.join(output_root, "features", feature_name)
-
-        if variant is None:
-            variant_dir = os.path.join(feature_dir, f"pc{pc}{appendix}")
-        else:
-            variant_dir = os.path.join(feature_dir, f"{variant}_pc{pc}{appendix}")
-
-        os.makedirs(variant_dir, exist_ok=True)
+    for wav_feature_pc, wav_name_no_ext in zip(wav_features_pc, wav_noext_names):
         out_mat_path = os.path.join(variant_dir, f"{wav_name_no_ext}.mat")
-        out_meta_stimuli_path = os.path.join(variant_dir, f"{wav_name_no_ext}.txt")
 
         if not os.path.exists(variant_dir):
             os.makedirs(variant_dir)
 
         # save data as mat
         hdf5storage.savemat(out_mat_path, {"features": wav_feature_pc})
-
-        # generate meta file for cochleagram
-        with open(out_meta_stimuli_path, "w") as f:
-            f.write(f"The shape of this feature is {wav_feature_pc.shape}.")
+    write_summary(
+        variant_dir,
+        time_window=f"{abs(time_window[0])} second before to {abs(time_window[1])} second after",
+        dimensions="[time, pc]",
+        extra="Weights are saved to",
+    )
+    return variant_dir
 
 
 def generate_pca_pipeline_from_weights(

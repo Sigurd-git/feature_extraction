@@ -1,0 +1,5 @@
+defaults:
+  - _self_
+out_sr: 100
+project: "intracranial-natsound119"
+stim_names: ""
