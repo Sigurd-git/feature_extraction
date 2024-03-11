@@ -117,12 +117,12 @@ def generate_AST_features(
         )
         # generate meta file for this layer
 
-    write_summary(
-        feature_variant_out_dir,
-        time_window=f"{abs(time_window[0])} second before to {abs(time_window[1])} second after",
-        dimensions="[time, feature]",
-        extra="Nothing",
-    )
+        write_summary(
+            feature_variant_out_dir,
+            time_window=f"{abs(time_window[0])} second before to {abs(time_window[1])} second after",
+            dimensions="[time, feature]",
+            extra="Nothing",
+        )
 
 
 def process_waveform(waveform, kernel=163840, stride=81920):

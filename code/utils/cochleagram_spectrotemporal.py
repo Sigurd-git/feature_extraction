@@ -94,6 +94,7 @@ def generate_cochleagram_and_spectrotemporal(
         coch_out_mat_path = os.path.join(feature_pc_cochleagram_dir, f"{stim_name}.mat")
         cochleagram_path = os.path.join(coch_pca_directory, f"coch_{stim_name}.mat")
         cochleagrams = hdf5storage.loadmat(cochleagram_path)["F"]  # t x pc
+        P = hdf5storage.loadmat(cochleagram_path)["P"]
         t_new = np.arange(cochleagrams.shape[0]) / out_sr + time_window[0]
         hdf5storage.savemat(coch_out_mat_path, {"features": cochleagrams, "t": t_new})
 
@@ -147,9 +148,7 @@ def generate_cochleagram_and_spectrotemporal(
         hdf5storage.savemat(
             spectrotemporal_out_mat_path, {"features": spectrotemporals, "t": t_new}
         )
-    logf = np.log(P["lo_freq_hz"]) + np.arange(0, P["n_filts"]) * P["logf_spacing"]
-    f = np.exp(logf)
-    P["f"] = f
+
 
     pca_weights_out_mat_path_coch_original = os.path.join(
         feature_original_cochleagram_dir, "pca_weights.mat"

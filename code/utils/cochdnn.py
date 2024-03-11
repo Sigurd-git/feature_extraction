@@ -281,12 +281,12 @@ def generate_CochDNN_features(
             out_mat_path, {"features": feats, "t": t_new + time_window[0]}
         )
 
-    write_summary(
-        feature_variant_out_dir,
-        time_window=f"{abs(time_window[0])} second before to {abs(time_window[1])} second after",
-        dimensions="[time, feature]",
-        extra="Nothing",
-    )
+        write_summary(
+            feature_variant_out_dir,
+            time_window=f"{abs(time_window[0])} second before to {abs(time_window[1])} second after",
+            dimensions="[time, feature]",
+            extra="Nothing",
+        )
 
 
 def cochdnn(
