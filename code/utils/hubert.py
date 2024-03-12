@@ -2,6 +2,7 @@ import os
 import hdf5storage
 import numpy as np
 import torch
+from torch.amp import autocast
 import torchaudio
 from general_analysis_code.preprocess import align_time
 from utils.hook import register_activation_hooks, remove_hooks
@@ -14,7 +15,14 @@ from utils.shared import write_summary, prepare_waveform
 
 
 def generate_HUBERT_features(
-    device, HUBERT_model, wav_path, output_root, n_t, out_sr=100, time_window=[-1, 1]
+    device,
+    HUBERT_model,
+    wav_path,
+    output_root,
+    n_t,
+    out_sr=100,
+    time_window=[-1, 1],
+    half=False,
 ):
     """
     This function generates HUBERT features for a given audio file.
@@ -43,7 +51,7 @@ def generate_HUBERT_features(
         conv6: (79.5+159.5)/2, (239.5+319.5)/2, ... = 119.5, 279.5, ... stride=2, kernel=2
         conv7: (119.5+279.5)/2, (439.5+599.5)/2, ... = 199.5, 519.5, ... stride=2, kernel=2
     """
-
+    HUBERT_model.eval()
     feature = "hubert"
     variants = [f"layer{i}" for i in range(19)]
     (
@@ -58,27 +66,32 @@ def generate_HUBERT_features(
     )
     waveform = torch.as_tensor(waveform)
     waveform = waveform.to(device)
-    HUBERT_bundle = torchaudio.pipelines.HUBERT_BASE  #    HUBERT_bundle (HUBERTBundle): The HUBERT bundle containing the sample rate and other information.
-    conv_kernels = [i[1] for i in HUBERT_bundle._params["extractor_conv_layer_config"]]
-    conv_strides = [i[2] for i in HUBERT_bundle._params["extractor_conv_layer_config"]]
+    with autocast(device_type=device.type, enabled=half):
+        HUBERT_bundle = torchaudio.pipelines.HUBERT_BASE  #    HUBERT_bundle (HUBERTBundle): The HUBERT bundle containing the sample rate and other information.
+        conv_kernels = [
+            i[1] for i in HUBERT_bundle._params["extractor_conv_layer_config"]
+        ]
+        conv_strides = [
+            i[2] for i in HUBERT_bundle._params["extractor_conv_layer_config"]
+        ]
 
-    if sample_rate != HUBERT_bundle.sample_rate:
-        waveform = torchaudio.functional.resample(
-            waveform, sample_rate, HUBERT_bundle.sample_rate
+        if sample_rate != HUBERT_bundle.sample_rate:
+            waveform = torchaudio.functional.resample(
+                waveform, sample_rate, HUBERT_bundle.sample_rate
+            )
+
+        # pad 0.5s before and pad 0.5s after
+        pad_number = int(HUBERT_bundle.sample_rate / 2)
+        waveform = torch.nn.functional.pad(
+            waveform, (pad_number, pad_number), "constant", 0
         )
-
-    # pad 0.5s before and pad 0.5s after
-    pad_number = int(HUBERT_bundle.sample_rate / 2)
-    waveform = torch.nn.functional.pad(
-        waveform, (pad_number, pad_number), "constant", 0
-    )
-    waveform = waveform.reshape(1, -1)
-    hooks, activations = register_activation_hooks(HUBERT_model)
-    with torch.inference_mode():
-        features, _ = HUBERT_model.extract_features(waveform)
-    remove_hooks(hooks)
-    sr = HUBERT_bundle.sample_rate
-    t_0 = -0.5
+        waveform = waveform.reshape(1, -1)
+        hooks, activations = register_activation_hooks(HUBERT_model)
+        with torch.inference_mode():
+            features, _ = HUBERT_model.extract_features(waveform)
+        remove_hooks(hooks)
+        sr = HUBERT_bundle.sample_rate
+        t_0 = -0.5
 
     for i, feats in enumerate(activations):
         # The start time of output of layer n is: t_0_{n+1} = t_0_{n} + (conv_kernel_{n}-1) / (2*sr_{n})
@@ -132,6 +145,7 @@ def generate_HUBERT_features(
             feature_variant_out_dir,
             time_window=f"{abs(time_window[0])} second before to {abs(time_window[1])} second after",
             dimensions="[time, feature]",
+            sampling_rate=out_sr,
             extra="Nothing",
         )
 
@@ -147,6 +161,7 @@ def hubert(
     pca_weights_from=None,
     **kwargs,
 ):
+    half = kwargs.get("half", False)
     compile_torch = kwargs.get("compile_torch", True)
     # TODO: Use large finetuned model
     HUBERT_bundle = torchaudio.pipelines.HUBERT_BASE
@@ -163,6 +178,7 @@ def hubert(
             n_t=None,
             out_sr=out_sr,
             time_window=time_window,
+            half=half,
         )
 
     # compute PC of hubert features
@@ -201,6 +217,7 @@ def hubert(
                 variant=f"layer{layer}",
                 pca_pipeline=pca_pipeline,
                 time_window=time_window,
+                sampling_rate=out_sr,
             )
 
 

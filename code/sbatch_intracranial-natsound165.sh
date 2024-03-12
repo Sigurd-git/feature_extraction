@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH -p doppelbock -t 04:00:00
 #SBATCH -c 8
-#SBATCH -a 0-13
+#SBATCH -a 0-8
 #SBATCH --mem=128G
 #SBATCH --gres=gpu:1 -x bhg0044,bhg0046,bhg0047,bhg0048
 #SBATCH -o /scratch/snormanh_lab/shared/projects/intracranial-natsound165/analysis/logs/%a.txt

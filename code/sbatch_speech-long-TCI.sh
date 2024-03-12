@@ -1,14 +1,14 @@
 #!/bin/bash
 #SBATCH -p doppelbock -t 04:00:00
 #SBATCH -c 10
-#SBATCH -a 0-13
-#SBATCH --mem=128G
-##SBATCH --gres=gpu:1 -x bhg0044,bhg0046,bhg0047,bhg0048
-#SBATCH -o /scratch/snormanh_lab/shared/projects/naturalsound-iEEG-sanitized-mixtures/analysis/logs/%a.txt
+#SBATCH -a 9
+#SBATCH --mem=64G
+#SBATCH --gres=gpu:1 -x bhg0044,bhg0046,bhg0047,bhg0048
+#SBATCH -o /scratch/snormanh_lab/shared/projects/speech-long-TCI/analysis/logs/%a.txt
 #SBATCH --mail-type=BEGIN,END,FAIL
 #SBATCH --mail-user=guoyang_liao@urmc.rochester.edu
 
-project=naturalsound-iEEG-sanitized-mixtures
+project=speech-long-TCI
 
 non_list=(modulus real rect)
 modulation_list=(spectempmod specmod tempmod)

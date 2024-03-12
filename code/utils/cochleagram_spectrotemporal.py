@@ -120,6 +120,7 @@ def generate_cochleagram_and_spectrotemporal(
         feature_original_cochleagram_dir,
         time_window,
         "[time, feaquency]",
+        sampling_rate=out_sr,
         extra="Parameters used to generate the cochleagram are contained in P variable of parameter.mat in the same directory.",
         parameter_dict=parameter_dict,
     )
@@ -128,6 +129,7 @@ def generate_cochleagram_and_spectrotemporal(
         feature_variant_spectrotemporal_dir,
         time_window,
         "[time, frequency, spectral modulation, temporal modulation, rate]",
+        sampling_rate=out_sr,
         extra="Parameters used to generate the spectrotemporal are contained in P variable of parameter.mat in the same directory.",
         parameter_dict=parameter_dict,
     )
@@ -206,7 +208,9 @@ def cochleagram_spectrotemporal(
             feature_name,
             stim_names,
             pca_pipeline=pca_pipeline,
+            variant=variant,
             time_window=time_window,
+            sampling_rate=out_sr,
         )
     feature_name = "spectrotemporal"
     variant = f"{modulation_type}_{nonlin}"
@@ -242,7 +246,9 @@ def cochleagram_spectrotemporal(
             feature_name,
             stim_names,
             pca_pipeline=pca_pipeline,
+            variant=variant,
             time_window=time_window,
+            sampling_rate=out_sr,
         )
 
 

@@ -1,0 +1,6 @@
+defaults:
+  - _self_
+
+project: "speech-long-TCI"
+stim_names: "fastslow-story1-fast-seg180-order1,fastslow-story1-fast-seg4-order1,fastslow-story1-slow-seg180-order1,fastslow-story1-slow-seg4-order1,fastslow-story2-fast-seg180-order1,fastslow-story2-fast-seg4-order1,fastslow-story2-slow-seg180-order1,fastslow-story2-slow-seg4-order1,slowfast-story1-fast-seg180-order1,slowfast-story1-fast-seg4-order1,slowfast-story1-slow-seg180-order1,slowfast-story1-slow-seg4-order1,slowfast-story2-fast-seg180-order1,slowfast-story2-fast-seg4-order1,slowfast-story2-slow-seg180-order1,slowfast-story2-slow-seg4-order1"
+time_window: [-4,4]

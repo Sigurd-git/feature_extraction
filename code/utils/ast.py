@@ -2,6 +2,8 @@ import os
 import hdf5storage
 import numpy as np
 import torch
+from torch.amp import autocast
+
 import torchaudio
 from general_analysis_code.preprocess import align_time
 from transformers import AutoProcessor, AutoModel
@@ -26,6 +28,7 @@ def ast(
     pca_weights_from=None,
     **kwargs,
 ):
+    half = kwargs.get("half", False)
     AST_model = AutoModel.from_pretrained("MIT/ast-finetuned-audioset-10-10-0.4593").to(
         device
     )
@@ -40,6 +43,7 @@ def ast(
             n_t=None,
             out_sr=out_sr,
             time_window=time_window,
+            half=half,
         )
 
     # compute PC of ast features
@@ -78,11 +82,19 @@ def ast(
                 variant=f"layer{layer}",
                 pca_pipeline=pca_pipeline,
                 time_window=time_window,
+                sampling_rate=out_sr,
             )
 
 
 def generate_AST_features(
-    device, AST_model, wav_path, output_root, n_t=None, out_sr=100, time_window=[-1, 1]
+    device,
+    AST_model,
+    wav_path,
+    output_root,
+    n_t=None,
+    out_sr=100,
+    time_window=[-1, 1],
+    half=False,
 ):
     feature = "ast"
     variants = [f"layer{i}" for i in range(14)]
@@ -96,6 +108,7 @@ def generate_AST_features(
     ) = prepare_waveform(
         out_sr, wav_path, output_root, n_t, time_window, feature, variants
     )
+    waveform = torch.as_tensor(waveform)
 
     # pad the waveform to cover 0
     t_0s = [0.01246875] + [0.08746875] * 13
@@ -103,9 +116,9 @@ def generate_AST_features(
     before_pad_number = int(np.max(t_0s) * sample_rate) + 1
     after_pad_number = 160000 * 3
     t_0s = np.array(t_0s) - before_pad_number / sample_rate
-    waveform = torch.as_tensor(waveform)
     waveform = torch.nn.functional.pad(waveform, (before_pad_number, after_pad_number))
-    outputs = extract_AST(device, AST_model, waveform, sample_rate)
+    with autocast(device_type=device.type, enabled=half):
+        outputs = extract_AST(device, AST_model, waveform, sample_rate)
     for i, (feats, t_0, sr) in enumerate(zip(outputs, t_0s, srs)):
         # The start time of output of layer n is: t_0_{n+1} = t_0_{n} + (conv_kernel_{n}-1) / (2*sr_{n})
         # The sr of output of layer n is: sr_{n+1} = sr_{n} / conv_stride_{n}
@@ -131,6 +144,7 @@ def generate_AST_features(
         write_summary(
             feature_variant_out_dir,
             time_window=f"{abs(time_window[0])} second before to {abs(time_window[1])} second after",
+            sampling_rate=out_sr,
             dimensions="[time, feature]",
             extra="Nothing",
         )
@@ -263,4 +277,4 @@ if __name__ == "__main__":
         f"{__file__}/../../../projects_toy/intracranial-natsound165/stimuli/stimulus_audio"
     )
     stim_names = ["stim5_alarm_clock"]
-    ast(device, output_root, stim_names, wav_dir, out_sr=100, pc=100)
+    ast(device, output_root, stim_names, wav_dir, out_sr=100, pc=100, half=True)

@@ -3,6 +3,7 @@ import os
 import torch
 from torch import nn
 import torchaudio
+from torch.amp import autocast
 import chcochleagram
 from robustness.tools.helpers import InputNormalize, AudioInputRepresentation
 from robustness.audio_models.custom_modules import SequentialWithArgs
@@ -218,6 +219,7 @@ def generate_CochResNet_features(
     device="cuda",
     variant="",
     time_window=[-1, 1],
+    half=False,
 ):
     feature = "cochresnet"
     variants = [f"{variant}_layer{i}" for i in range(6)]
@@ -238,8 +240,8 @@ def generate_CochResNet_features(
     after_pad_number = 1200
     waveform = torch.nn.functional.pad(waveform, (before_pad_number, after_pad_number))
     t_0s = np.array(t_0s) - before_pad_number / sample_rate
-
-    outputs = extract_CochResNet(waveform, model, sample_rate, device=device)
+    with autocast(device_type=device.type,enabled=half):
+        outputs = extract_CochResNet(waveform, model, sample_rate, device=device)
 
     for i, (feats, t_0, sr) in enumerate(zip(outputs, t_0s, srs)):
         print(f"t_0_{i}={t_0}, sr_{i}={sr}")
@@ -264,6 +266,7 @@ def generate_CochResNet_features(
             feature_variant_out_dir,
             time_window=f"{abs(time_window[0])} second before to {abs(time_window[1])} second after",
             dimensions="[time, feature]",
+            sampling_rate=out_sr,
             extra="Nothing",
         )
 
@@ -279,6 +282,7 @@ def cochresnet(
     pca_weights_from=None,
     **kwargs,
 ):
+    half = kwargs.get("half", False)
     CochResNet_model = build_model()
     variant = "wsa"
     for stim_index, stim_name in enumerate(stim_names):
@@ -330,6 +334,7 @@ def cochresnet(
                 variant=f"{variant}_layer{layer}",
                 pca_pipeline=pca_pipeline,
                 time_window=time_window,
+                sampling_rate=out_sr,
             )
 
 

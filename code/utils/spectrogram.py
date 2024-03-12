@@ -63,6 +63,7 @@ def generate_spectrogram_features(
         feature_variant_out_dir,
         time_window=f"{abs(time_window[0])} second before to {abs(time_window[1])} second after",
         dimensions="[time, feature]",
+        sampling_rate=out_sr,
         extra="Nothing",
     )
 
@@ -87,6 +88,7 @@ def spectrogram(
 
     if pc < nfilts:
         feature_name = "spectrogram"
+        variant = "original"
         wav_features = []
         for stim_index, stim_name in enumerate(stim_names):
             wav_path = os.path.join(wav_dir, f"{stim_name}.wav")
@@ -97,7 +99,7 @@ def spectrogram(
             wav_features.append(feature)
 
         if pca_weights_from is not None:
-            weights_path = f"{pca_weights_from}/features/{feature_name}/original/metadata/pca_weights.mat"
+            weights_path = f"{pca_weights_from}/features/{feature_name}/variant/metadata/pca_weights.mat"
             pca_pipeline = generate_pca_pipeline_from_weights(
                 weights_from=weights_path, pc=pc
             )
@@ -109,7 +111,7 @@ def spectrogram(
                 feature_name,
                 demean=True,
                 std=False,
-                variant="original",
+                variant=variant,
             )
         apply_pca_pipeline(
             wav_features,
@@ -118,6 +120,9 @@ def spectrogram(
             feature_name,
             stim_names,
             pca_pipeline=pca_pipeline,
+            variant=variant,
+            time_window=time_window,
+            sampling_rate=out_sr,
         )
 
 

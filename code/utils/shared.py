@@ -9,6 +9,7 @@ def write_summary(
     feature_variant_out_dir,
     time_window="1 second before to 1 second after",
     dimensions="[time, feature]",
+    sampling_rate=100,
     extra="Nothing",
     url="https://github.com/Sigurd-git/feature_extraction/tree/main/code/utils",
     parameter_dict=None,
@@ -22,6 +23,7 @@ def write_summary(
         f.write(
             f"""Time window: {time_window};
 The dimensions of the matrices: {dimensions};
+The sampling rate of the features: {sampling_rate} Hz;
 Code used to generate those features are here: {url};
 Extra comments: {extra}."""
         )

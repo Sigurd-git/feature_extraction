@@ -5,6 +5,7 @@ defaults:
 env:
   device: null
   feature: null
+  half: false
   out_sr: 100
   pc: 100
   pca_weights_from: null

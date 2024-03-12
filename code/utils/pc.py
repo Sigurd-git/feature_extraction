@@ -157,10 +157,11 @@ def apply_pca_pipeline(
     variant=None,
     appendix="",
     time_window=[-1, 1],
+    sampling_rate=100,
 ):
     feature_dir = os.path.join(output_root, "features", feature_name)
 
-    if variant is None:
+    if (variant is None) or (variant == "") or (variant == "original"):
         variant_dir = os.path.join(feature_dir, f"pc{pc}{appendix}")
     else:
         variant_dir = os.path.join(feature_dir, f"{variant}_pc{pc}{appendix}")
@@ -198,8 +199,14 @@ def apply_pca_pipeline(
         variant_dir,
         time_window=f"{abs(time_window[0])} second before to {abs(time_window[1])} second after",
         dimensions="[time, pc]",
+        sampling_rate=sampling_rate,
         extra=f"""Weights are saved to {out_mat_path}
-Read in the US from the stimname files and multiply by V^T""",
+You can reconstruct (nearly) the original features by reading in the US from the stimname files and multiply by V^T
+In python:
+feature = hdf5storage.loadmat(stim_file)["features"]
+Vt = hdf5storage.loadmat(pca_weights_file)["V"]
+original_feature = np.matmul(feature, V.T)
+""",
     )
     return variant_dir
 
@@ -209,6 +216,7 @@ def generate_pca_pipeline_from_weights(
     pc=None,
 ):
     # pc should be a number
+    print(f"Loading weights from {weights_from}")
     weights_mat = hdf5storage.loadmat(weights_from)
     V = weights_mat["V"]
     V_all = weights_mat["V_all"]
