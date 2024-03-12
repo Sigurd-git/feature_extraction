@@ -4,6 +4,11 @@ import numpy as np
 import hdf5storage
 import shutil
 from utils.shared import write_summary, create_feature_variant_dir
+from utils.pc import (
+    generate_pca_pipeline,
+    apply_pca_pipeline,
+    generate_pca_pipeline_from_weights,
+)
 import torch
 
 
@@ -12,7 +17,6 @@ def generate_cochleagram_and_spectrotemporal(
     stim_names,
     wav_dir,
     out_sr,
-    pc,
     modulation_type,
     nonlin,
     output_root,
@@ -45,31 +49,17 @@ def generate_cochleagram_and_spectrotemporal(
     )
     out_sr = float(out_sr)
     time_window = matlab.double(time_window)
-    (
-        pca_weight_MAT_files,
-        model_features,
-        pca_timecourses_allstim_allmodels,
-        coch_output_directory,
-        modulation_output_directory,
-        pca_output_directories,
-        temp_dir,
-        P,
-    ) = eng.coch_spectrotemporal(
-        device,
-        stim_names,
-        wav_dir,
-        out_sr,
-        pc,
-        [modulation_type],
-        nonlin,
-        time_window,
-        nargout=8,
-    )
-    coch_pca_directory = os.path.abspath(pca_output_directories[0])
-    spectrotemporal_pca_directory = os.path.abspath(pca_output_directories[1])
-    coch_pca_weight_MAT_file = os.path.abspath(pca_weight_MAT_files[0]) + ".mat"
-    spectrotemporal_pca_weight_MAT_file = (
-        os.path.abspath(pca_weight_MAT_files[1]) + ".mat"
+    (coch_output_directory, modulation_output_directory, temp_dir, P) = (
+        eng.coch_spectrotemporal(
+            device,
+            stim_names,
+            wav_dir,
+            out_sr,
+            [modulation_type],
+            nonlin,
+            time_window,
+            nargout=4,
+        )
     )
 
     # create feature variant directories
@@ -77,50 +67,20 @@ def generate_cochleagram_and_spectrotemporal(
         output_root, "cochleagram", "original"
     )
 
-    _, feature_pc_cochleagram_dir = create_feature_variant_dir(
-        output_root, "cochleagram", f"pc{pc}"
-    )
-
-    _, feature_pc_spectrotemporal_dir = create_feature_variant_dir(
-        output_root, "spectrotemporal", f"{modulation_type}_{nonlin}_pc{pc}"
-    )
-
     _, feature_variant_spectrotemporal_dir = create_feature_variant_dir(
         output_root, "spectrotemporal", f"{modulation_type}_{nonlin}"
     )
     time_window = np.array(time_window).reshape(-1)
     for stim_index, stim_name in enumerate(stim_names):
-        # save cochleagram pc
-        coch_out_mat_path = os.path.join(feature_pc_cochleagram_dir, f"{stim_name}.mat")
-        cochleagram_path = os.path.join(coch_pca_directory, f"coch_{stim_name}.mat")
-        cochleagrams = hdf5storage.loadmat(cochleagram_path)["F"]  # t x pc
-        P = hdf5storage.loadmat(cochleagram_path)["P"]
-        t_new = np.arange(cochleagrams.shape[0]) / out_sr + time_window[0]
-        hdf5storage.savemat(coch_out_mat_path, {"features": cochleagrams, "t": t_new})
-
         # save cochleagram original
         coch_out_mat_path = os.path.join(
             feature_original_cochleagram_dir, f"{stim_name}.mat"
         )
         cochleagram_path = os.path.join(coch_output_directory, f"coch_{stim_name}.mat")
         cochleagrams = hdf5storage.loadmat(cochleagram_path)["F"]  # t x pc
+
         t_new = np.arange(cochleagrams.shape[0]) / out_sr + time_window[0]
         hdf5storage.savemat(coch_out_mat_path, {"features": cochleagrams, "t": t_new})
-
-        # save spectrotemporal pc
-        spectrotemporal_pc_out_mat_path = os.path.join(
-            feature_pc_spectrotemporal_dir, f"{stim_name}.mat"
-        )
-        spectrotemporal_path = os.path.join(
-            spectrotemporal_pca_directory, f"{modulation_type}_{nonlin}_{stim_name}.mat"
-        )
-        spectrotemporals = hdf5storage.loadmat(spectrotemporal_path)["F"]  # t x pc
-        t_new = np.arange(spectrotemporals.shape[0]) / out_sr + time_window[0]
-        V = hdf5storage.loadmat(spectrotemporal_pca_weight_MAT_file)["pca_weights"]
-        hdf5storage.savemat(
-            spectrotemporal_pc_out_mat_path,
-            {"features": spectrotemporals, "t": t_new},
-        )
 
         # save spectrotemporal original
         spectrotemporal_out_mat_path = os.path.join(
@@ -148,56 +108,28 @@ def generate_cochleagram_and_spectrotemporal(
         hdf5storage.savemat(
             spectrotemporal_out_mat_path, {"features": spectrotemporals, "t": t_new}
         )
-
-
-    pca_weights_out_mat_path_coch_original = os.path.join(
-        feature_original_cochleagram_dir, "pca_weights.mat"
-    )
-    V = hdf5storage.loadmat(coch_pca_weight_MAT_file)["pca_weights"]
-    hdf5storage.savemat(pca_weights_out_mat_path_coch_original, {"V": V})
-
-    pca_weights_out_mat_path_coch_pc = os.path.join(
-        feature_pc_cochleagram_dir, "pca_weights.mat"
-    )
-    hdf5storage.savemat(pca_weights_out_mat_path_coch_pc, {"V": V})
-
-    pca_weights_out_mat_path_spectrotemporal_pc = os.path.join(
-        feature_pc_spectrotemporal_dir, "pca_weights.mat"
-    )
-    V = hdf5storage.loadmat(spectrotemporal_pca_weight_MAT_file)["pca_weights"]
-    hdf5storage.savemat(pca_weights_out_mat_path_spectrotemporal_pc, {"V": V})
-    pca_weights_out_mat_path_spectrotemporal = os.path.join(
-        feature_variant_spectrotemporal_dir, "pca_weights.mat"
-    )
-    hdf5storage.savemat(pca_weights_out_mat_path_spectrotemporal, {"V": V})
+    P = hdf5storage.loadmat(cochleagram_path)["P"]
+    f = P["f"][0, 0].reshape(-1)
+    parameter_dict = {}
+    for key in P.dtype.names:
+        parameter_dict[key] = P[key][0, 0]
+    parameter_dict["f"] = f
+    # save parameters
 
     write_summary(
         feature_original_cochleagram_dir,
         time_window,
         "[time, feaquency]",
         extra="Parameters used to generate the cochleagram are contained in P variable of parameter.mat in the same directory.",
-        parameter_dict=P,
+        parameter_dict=parameter_dict,
     )
-    write_summary(
-        feature_pc_cochleagram_dir,
-        time_window,
-        "[time, pc]",
-        extra="Parameters used to generate the cochleagram are contained in P variable of parameter.mat in the same directory. The pca_weight used to compute the pcs are saved together with the pcs in the same mat file. The pca_weight is saved in the V variable.",
-        parameter_dict=P,
-    )
-    write_summary(
-        feature_pc_spectrotemporal_dir,
-        time_window,
-        "[time, pc]",
-        extra="Parameters used to generate the spectrotemporal are contained in P variable of parameter.mat in the same directory. The pca_weight used to compute the pcs are saved together with the pcs in the same mat file. The pca_weight is saved in the V variable.",
-        parameter_dict=P,
-    )
+
     write_summary(
         feature_variant_spectrotemporal_dir,
         time_window,
         "[time, frequency, spectral modulation, temporal modulation, rate]",
         extra="Parameters used to generate the spectrotemporal are contained in P variable of parameter.mat in the same directory.",
-        parameter_dict=P,
+        parameter_dict=parameter_dict,
     )
     # remove temp_dir
     shutil.rmtree(temp_dir)
@@ -211,6 +143,7 @@ def cochleagram_spectrotemporal(
     out_sr=100,
     pc=100,
     time_window=[-1, 1],
+    pca_weights_from=None,
     **kwargs,
 ):
     #     % % tempmod: only temporal modulation filters
@@ -218,7 +151,7 @@ def cochleagram_spectrotemporal(
     # % % spectempmod: joint spectrotemporal filters
     # % modulation_types = {'tempmod', 'specmod', 'spectempmod'};
     # nonlin: modulus or real or rect
-    modulation_type = kwargs.get("modulation_type", ["tempmod"])
+    modulation_type = kwargs.get("modulation_type", "tempmod")
     nonlin = kwargs.get("nonlin", "modulus")
     debug = kwargs.get("debug", False)
     if isinstance(device, str):
@@ -234,24 +167,94 @@ def cochleagram_spectrotemporal(
         stim_names=stim_names,
         wav_dir=wav_dir,
         out_sr=out_sr,
-        pc=pc,
         modulation_type=modulation_type,
         nonlin=nonlin,
         output_root=output_root,
         debug=debug,
         time_window=time_window,
     )
+    feature_name = "cochleagram"
+    variant = "original"
+    if pc is not None:
+        wav_features = []
+        for stim_index, stim_name in enumerate(stim_names):
+            feature_path = (
+                f"{output_root}/features/{feature_name}/{variant}/{stim_name}.mat"
+            )
+            feature = hdf5storage.loadmat(feature_path)["features"]
+            wav_features.append(feature)
+        print(f"Start computing PCs for {feature_name} ")
+        if pca_weights_from is not None:
+            weights_path = f"{pca_weights_from}/features/{feature_name}/{variant}/metadata/pca_weights.mat"
+            pca_pipeline = generate_pca_pipeline_from_weights(
+                weights_from=weights_path, pc=pc
+            )
+        else:
+            pca_pipeline = generate_pca_pipeline(
+                wav_features,
+                pc,
+                output_root,
+                feature_name,
+                demean=True,
+                std=False,
+                variant=variant,
+            )
+        feature_variant_out_dir = apply_pca_pipeline(
+            wav_features,
+            pc,
+            output_root,
+            feature_name,
+            stim_names,
+            pca_pipeline=pca_pipeline,
+            time_window=time_window,
+        )
+    feature_name = "spectrotemporal"
+    variant = f"{modulation_type}_{nonlin}"
+    if pc is not None:
+        wav_features = []
+        for stim_index, stim_name in enumerate(stim_names):
+            feature_path = (
+                f"{output_root}/features/{feature_name}/{variant}/{stim_name}.mat"
+            )
+            feature = hdf5storage.loadmat(feature_path)["features"]
+            feature = feature.reshape(feature.shape[0], -1)
+            wav_features.append(feature)
+        print(f"Start computing PCs for {feature_name} ")
+        if pca_weights_from is not None:
+            weights_path = f"{pca_weights_from}/features/{feature_name}/{variant}/metadata/pca_weights.mat"
+            pca_pipeline = generate_pca_pipeline_from_weights(
+                weights_from=weights_path, pc=pc
+            )
+        else:
+            pca_pipeline = generate_pca_pipeline(
+                wav_features,
+                pc,
+                output_root,
+                feature_name,
+                demean=True,
+                std=False,
+                variant=variant,
+            )
+        feature_variant_out_dir = apply_pca_pipeline(
+            wav_features,
+            pc,
+            output_root,
+            feature_name,
+            stim_names,
+            pca_pipeline=pca_pipeline,
+            time_window=time_window,
+        )
 
 
 if __name__ == "__main__":
     cochleagram_spectrotemporal(
-        device=torch.device("gpu"),
+        device=torch.device("cuda"),
         output_root=os.path.abspath(
             f"{__file__}/../../../projects_toy/intracranial-natsound165/analysis"
         ),
         stim_names=["stim5_alarm_clock", "stim7_applause"],
         wav_dir=os.path.abspath(
-            f"{__file__}/../../../projects_toy/intracranial-natsound165/stimuli/stimulus_audio"
+            f"{__file__}/../../../projects_toy/intracranial-natsound165/stimuli/audio"
         ),
         modulation_type="tempmod",
         debug=True,

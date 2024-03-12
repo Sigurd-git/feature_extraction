@@ -2,7 +2,11 @@ import os
 import hdf5storage
 import importlib
 import numpy as np
-from utils.pc import generate_pca_pipeline, apply_pca_pipeline
+from utils.pc import (
+    generate_pca_pipeline,
+    apply_pca_pipeline,
+    generate_pca_pipeline_from_weights,
+)
 from utils.shared import write_summary, prepare_waveform
 
 # from audio_tools import get_mel_spectrogram using importlib
@@ -71,6 +75,7 @@ def spectrogram(
     out_sr=100,
     pc=100,
     time_window=[-1, 1],
+    pca_weights_from=None,
     **kwargs,
 ):
     nfilts = kwargs.get("nfilts", 80)
@@ -91,14 +96,21 @@ def spectrogram(
             feature = hdf5storage.loadmat(feature_path)["features"]
             wav_features.append(feature)
 
-        pca_pipeline = generate_pca_pipeline(
-            wav_features,
-            pc,
-            output_root,
-            feature_name,
-            demean=True,
-            std=False,
-        )
+        if pca_weights_from is not None:
+            weights_path = f"{pca_weights_from}/features/{feature_name}/original/metadata/pca_weights.mat"
+            pca_pipeline = generate_pca_pipeline_from_weights(
+                weights_from=weights_path, pc=pc
+            )
+        else:
+            pca_pipeline = generate_pca_pipeline(
+                wav_features,
+                pc,
+                output_root,
+                feature_name,
+                demean=True,
+                std=False,
+                variant="original",
+            )
         apply_pca_pipeline(
             wav_features,
             pc,

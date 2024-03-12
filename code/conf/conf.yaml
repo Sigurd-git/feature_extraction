@@ -7,6 +7,7 @@ env:
   feature: null
   out_sr: 100
   pc: 100
+  pca_weights_from: null
   project: ""
   root: "/scratch/snormanh_lab/shared/projects"
   spectrogram:

@@ -10,13 +10,22 @@ def parse(cfg):
     args = cfg.env
     device = args.device
     if device is None:
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        if torch.cuda.is_available():
+            device = torch.device("cuda")
+        elif torch.backends.mps.is_available():
+            device = torch.device("mps")
+        else:
+            device = torch.device("cpu")
     else:
         device = torch.device(device)
 
     stim_names = args.stim_names
     stim_names = stim_names.split(",")
     root = args.root  # /scratch/snormanh_lab/shared/projects
+    pca_weights_from = args.pca_weights_from
+    pca_weights_from = (
+        f"{root}/{pca_weights_from}/analysis" if pca_weights_from is not None else None
+    )
     project = args.project
     output_root = f"{root}/{project}/analysis"
     wav_dir = f"{root}/{project}/stimuli/audio"
@@ -33,6 +42,7 @@ def parse(cfg):
         {
             "device": device,
             "output_root": output_root,
+            "pca_weights_from": pca_weights_from,
             "stim_names": stim_names,
             "wav_dir": wav_dir,
         }
@@ -64,6 +74,7 @@ def main(cfg):
             out_sr=args_dict.out_sr,
             pc=args_dict.pc,
             time_window=args_dict.time_window,
+            pca_weights_from=args_dict.pca_weights_from,
         )
     elif args_dict.feature == "cochdnn":
         from utils.cochdnn import cochdnn
@@ -76,6 +87,7 @@ def main(cfg):
             out_sr=args_dict.out_sr,
             pc=args_dict.pc,
             time_window=args_dict.time_window,
+            pca_weights_from=args_dict.pca_weights_from,
         )
     elif args_dict.feature == "cochleagram_spectrotemporal":
         from utils.cochleagram_spectrotemporal import cochleagram_spectrotemporal
@@ -90,6 +102,7 @@ def main(cfg):
             modulation_type=args_dict.spectrotemporal.modulation_type,
             nonlin=args_dict.spectrotemporal.nonlin,
             time_window=args_dict.time_window,
+            pca_weights_from=args_dict.pca_weights_from,
         )
     elif args_dict.feature == "cochresnet":
         from utils.cochresnet import cochresnet
@@ -102,6 +115,7 @@ def main(cfg):
             out_sr=args_dict.out_sr,
             pc=args_dict.pc,
             time_window=args_dict.time_window,
+            pca_weights_from=args_dict.pca_weights_from,
         )
     elif args_dict.feature == "hubert":
         from utils.hubert import hubert
@@ -114,6 +128,7 @@ def main(cfg):
             out_sr=args_dict.out_sr,
             pc=args_dict.pc,
             time_window=args_dict.time_window,
+            pca_weights_from=args_dict.pca_weights_from,
         )
     elif args_dict.feature == "spectrogram":
         from utils.spectrogram import spectrogram
@@ -127,6 +142,7 @@ def main(cfg):
             pc=args_dict.pc,
             nfilts=args_dict.spectrogram.nfilts,
             time_window=args_dict.time_window,
+            pca_weights_from=args_dict.pca_weights_from,
         )
         pass
     else:

@@ -12,7 +12,11 @@ from general_analysis_code.preprocess import align_time
 from robustness.audio_models.resnet_multi_task import conv1x1, BasicBlock, Bottleneck
 from robustness.audio_models.resnet import model_urls
 import torch.utils.model_zoo as model_zoo
-from utils.pc import generate_pca_pipeline, apply_pca_pipeline
+from utils.pc import (
+    generate_pca_pipeline,
+    apply_pca_pipeline,
+    generate_pca_pipeline_from_weights,
+)
 from utils.shared import write_summary, prepare_waveform
 
 
@@ -272,6 +276,7 @@ def cochresnet(
     out_sr=100,
     pc=100,
     time_window=[-1, 1],
+    pca_weights_from=None,
     **kwargs,
 ):
     CochResNet_model = build_model()
@@ -301,15 +306,21 @@ def cochresnet(
                 feature = hdf5storage.loadmat(feature_path)["features"]
                 wav_features.append(feature)
             print(f"Start computing PCs for {feature_name} layer {layer}")
-            pca_pipeline = generate_pca_pipeline(
-                wav_features,
-                pc,
-                output_root,
-                feature_name,
-                demean=True,
-                std=False,
-                variant=f"{variant}_layer{layer}",
-            )
+            if pca_weights_from is not None:
+                weights_path = f"{pca_weights_from}/features/{feature_name}/{variant}_layer{layer}/metadata/pca_weights.mat"
+                pca_pipeline = generate_pca_pipeline_from_weights(
+                    weights_from=weights_path, pc=pc
+                )
+            else:
+                pca_pipeline = generate_pca_pipeline(
+                    wav_features,
+                    pc,
+                    output_root,
+                    feature_name,
+                    demean=True,
+                    std=False,
+                    variant=f"{variant}_layer{layer}",
+                )
             feature_variant_out_dir = apply_pca_pipeline(
                 wav_features,
                 pc,

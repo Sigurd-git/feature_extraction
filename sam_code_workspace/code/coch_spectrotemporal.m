@@ -1,4 +1,4 @@
-function [pca_weight_MAT_files, model_features, pca_timecourses_allstim_allmodels, coch_output_directory, modulation_output_directory, pca_output_directories,temp_dir,P] = coch_spectrotemporal(device,stim_names, wav_dir, out_sr, pc, modulation_types, nonlin,time_window);
+function [coch_output_directory, modulation_output_directory,temp_dir,P] = coch_spectrotemporal(device,stim_names, wav_dir, out_sr, modulation_types, nonlin,time_window);
 
 fullPath = mfilename('fullpath');
 [currentFolder, ~, ~] = fileparts(fullPath);
@@ -10,9 +10,6 @@ addpath(currentFolder);
 
 % sampling rate to use for the analysis
 feature_sr = out_sr;
-
-% number of PCs
-nPCs = pc;
 
 % Parameters
 P = measurement_parameters_default; 
@@ -64,8 +61,8 @@ end
 
 % compute features and get PCs
 feature_directory = [temp_dir '/spectemp-with-padding'];
-[pca_timecourse_MAT_files, pca_weight_MAT_files, model_features, pca_timecourses_allstim_allmodels, coch_output_directory, modulation_output_directory, pca_output_directories] = allfeats_pca_multistim(...
-    modulation_types, fnames, nPCs, feature_sr, wav_temp_dir, feature_directory, P);
+[coch_output_directory, modulation_output_directory] = allfeats_multistim(...
+    modulation_types, fnames, feature_sr, wav_temp_dir, feature_directory, P);
 
 
 end

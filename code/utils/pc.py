@@ -42,21 +42,22 @@ class PCA:
 
         self.components = self.Vt[: self.n_components]
 
-    def load(self, mean, std, V):
+    def load(self, mean, std, V_all):
         """
         Load the mean, standard deviation, and principal components from saved files to prepare for PCA.
 
         Args:
             mean (numpy.ndarray): The mean of the data.
             std (numpy.ndarray): The standard deviation of the data.
-            V (numpy.ndarray): The principal components of the data.
+            V_all (numpy.ndarray): The principal components of the data.
 
         Returns:
             None
         """
         self.mean = mean
         self.std = std
-        self.components = V.T
+        self.Vt = V_all.T
+        self.components = V_all[:, : self.n_components].T
 
     def transform(self, X):
         """
@@ -125,17 +126,23 @@ def generate_pca_pipeline(
     pca_pipeline = PCA(n_components=pc, demean=demean, standardize=std)
     pca_pipeline.fit(feature)
 
-    Vt = pca_pipeline.Vt
+    Vt = pca_pipeline.components
+    Vt_all = pca_pipeline.Vt
     # asser output_roots are all the same
     assert np.all([output_root == output_roots[0] for output_root in output_roots])
     feature_dir = os.path.join(output_roots[0], "features", feature_name)
     variant_dir = os.path.join(feature_dir, f"{variant}{appendix}")
 
     os.makedirs(variant_dir, exist_ok=True)
-    out_mat_path = os.path.join(variant_dir, "pca_weights.mat")
+    out_mat_path = os.path.join(variant_dir, "metadata", "pca_weights.mat")
     hdf5storage.savemat(
         out_mat_path,
-        {"V": Vt[:pc].T, "mean": pca_pipeline.mean, "std": pca_pipeline.std},
+        {
+            "V": Vt.T,
+            "V_all": Vt_all.T,
+            "mean": pca_pipeline.mean,
+            "std": pca_pipeline.std,
+        },
     )
     return pca_pipeline
 
@@ -158,12 +165,18 @@ def apply_pca_pipeline(
     else:
         variant_dir = os.path.join(feature_dir, f"{variant}_pc{pc}{appendix}")
 
-    os.makedirs(variant_dir, exist_ok=True)
-    out_mat_path = os.path.join(variant_dir, "pca_weights.mat")
-    Vt = pca_pipeline.Vt
+    os.makedirs(os.path.join(variant_dir, "metadata"), exist_ok=True)
+    out_mat_path = os.path.join(variant_dir, "metadata", "pca_weights.mat")
+    Vt = pca_pipeline.components
+    Vt_all = pca_pipeline.Vt
     hdf5storage.savemat(
         out_mat_path,
-        {"V": Vt[:pc].T, "mean": pca_pipeline.mean, "std": pca_pipeline.std},
+        {
+            "V": Vt.T,
+            "V_all": Vt_all.T,
+            "mean": pca_pipeline.mean,
+            "std": pca_pipeline.std,
+        },
     )
     feature = np.concatenate(wav_features, axis=0)
     features_pc = pca_pipeline.transform(feature)
@@ -185,7 +198,8 @@ def apply_pca_pipeline(
         variant_dir,
         time_window=f"{abs(time_window[0])} second before to {abs(time_window[1])} second after",
         dimensions="[time, pc]",
-        extra="Weights are saved to",
+        extra=f"""Weights are saved to {out_mat_path}
+Read in the US from the stimname files and multiply by V^T""",
     )
     return variant_dir
 
@@ -197,18 +211,19 @@ def generate_pca_pipeline_from_weights(
     # pc should be a number
     weights_mat = hdf5storage.loadmat(weights_from)
     V = weights_mat["V"]
+    V_all = weights_mat["V_all"]
     mean = weights_mat["mean"]
     std = weights_mat["std"]
-    if mean == 0:
+    if np.all(mean == 0):
         demean = False
     else:
         demean = True
-    if std == 1:
+    if np.all(std == 1):
         std = False
     else:
         std = True
     pc = V.shape[1] if pc is None else pc
     pca_pipeline = PCA(n_components=pc, demean=demean, standardize=std)
-    pca_pipeline.load(mean, std, V)
+    pca_pipeline.load(mean, std, V_all)
 
     return pca_pipeline
