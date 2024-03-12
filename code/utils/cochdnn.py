@@ -20,6 +20,156 @@ from utils.pc import (
 from utils.shared import write_summary, prepare_waveform
 
 
+def cochdnn(
+    device,
+    output_root,
+    stim_names,
+    wav_dir,
+    out_sr=100,
+    pc=100,
+    time_window=[-1, 1],
+    pca_weights_from=None,
+    compute_original=True,
+    meta_only=False,
+    **kwargs,
+):
+    half = kwargs.get("half", False)
+    feature_name = "cochdnn"
+    variant = "wsa"
+    if compute_original:
+        CochDNN_model = build_model()
+        for stim_index, stim_name in enumerate(stim_names):
+            wav_path = os.path.join(wav_dir, f"{stim_name}.wav")
+            generate_CochDNN_features(
+                device=device,
+                model=CochDNN_model,
+                wav_path=wav_path,
+                output_root=output_root,
+                n_t=None,
+                out_sr=out_sr,
+                variant=variant,
+                time_window=time_window,
+                half=half,
+                meta_only=meta_only,
+            )
+
+    # compute PC of cochdnn features
+
+    layer_num = 6
+    if pc is not None:
+        for layer in range(layer_num):
+            wav_features = []
+            for stim_index, stim_name in enumerate(stim_names):
+                wav_path = os.path.join(wav_dir, f"{stim_name}.wav")
+                feature_path = f"{output_root}/features/{feature_name}/{variant}_layer{layer}/{stim_name}.mat"
+                feature = hdf5storage.loadmat(feature_path)["features"]
+                wav_features.append(feature)
+            print(f"Start computing PCs for {feature_name} layer {layer}")
+
+            if pca_weights_from is not None:
+                weights_path = f"{pca_weights_from}/features/{feature_name}/{variant}_layer{layer}/metadata/pca_weights.mat"
+                pca_pipeline = generate_pca_pipeline_from_weights(
+                    weights_from=weights_path, pc=pc
+                )
+            else:
+                pca_pipeline = generate_pca_pipeline(
+                    wav_features,
+                    pc,
+                    output_root,
+                    feature_name,
+                    demean=True,
+                    std=False,
+                    variant=f"{variant}_layer{layer}",
+                )
+            feature_variant_out_dir = apply_pca_pipeline(
+                wav_features,
+                pc,
+                output_root,
+                feature_name,
+                stim_names,
+                variant=f"{variant}_layer{layer}",
+                pca_pipeline=pca_pipeline,
+                time_window=time_window,
+                sampling_rate=out_sr,
+                meta_only=meta_only,
+            )
+
+
+def generate_CochDNN_features(
+    wav_path,
+    model,
+    output_root,
+    n_t=None,
+    out_sr=100,
+    device="cuda",
+    variant="",
+    time_window=[-1, 1],
+    half=False,
+    meta_only=False,
+):
+    feature = "cochdnn"
+    variants = [f"{variant}_layer{i}" for i in range(6)]
+    (
+        wav_name_no_ext,
+        waveform,
+        sample_rate,
+        t_num_new,
+        t_new,
+        feature_variant_out_dirs,
+    ) = prepare_waveform(
+        out_sr, wav_path, output_root, n_t, time_window, feature, variants
+    )
+    if not meta_only:
+        waveform = torch.as_tensor(waveform)
+        t_0s = [0.025, 0.0325, 0.0475, 0.0475, 0.0475, 0.0475]
+        srs = [200, 200 / 3, 50 / 3, 25 / 3, 25 / 3, 25 / 3]
+        before_pad_number = int(np.max(t_0s) * sample_rate) + 1
+        after_pad_number = 1200
+        waveform = torch.nn.functional.pad(
+            waveform, (before_pad_number, after_pad_number)
+        )
+        t_0s = np.array(t_0s) - before_pad_number / sample_rate
+        with autocast(device_type=device.type, enabled=half):
+            outputs = extract_CochDNN(waveform, model, sample_rate, device=device)
+
+        for i, (feats, t_0, sr) in enumerate(zip(outputs, t_0s, srs)):
+            print(f"t_0_{i}={t_0}, sr_{i}={sr}")
+            feature_variant_out_dir = feature_variant_out_dirs[i]
+            ### align time to start from 0 and make the length to be n_t
+            t_length = feats.shape[0]
+            t_origin = np.arange(t_length) / sr + t_0
+
+            feats = align_time(feats, t_origin, t_new, "t f")
+            print(f"Feature {i}: {feats.shape}")
+
+            # save each layer as mat
+            out_mat_path = os.path.join(
+                feature_variant_out_dir, f"{wav_name_no_ext}.mat"
+            )
+
+            # save data as mat
+            hdf5storage.savemat(
+                out_mat_path, {"features": feats, "t": t_new + time_window[0]}
+            )
+
+            write_summary(
+                feature_variant_out_dir,
+                time_window=f"{abs(time_window[0])} second before to {abs(time_window[1])} second after",
+                dimensions="[time, feature]",
+                sampling_rate=out_sr,
+                extra="Nothing",
+            )
+    else:
+        for feature_variant_out_dir in feature_variant_out_dirs:
+            write_summary(
+                feature_variant_out_dir,
+                time_window=f"{abs(time_window[0])} second before to {abs(time_window[1])} second after",
+                dimensions="[time, feature]",
+                sampling_rate=out_sr,
+                extra="Nothing",
+            )
+
+
 class AuditoryCNNMultiTask(nn.Module):
     def __init__(self, num_classes=1000):
         super(AuditoryCNNMultiTask, self).__init__()
@@ -236,136 +386,6 @@ def extract_CochDNN(waveform, model, sample_rate, device="cuda"):
         for key in activation_keys
     ]
     return activations
-
-
-def generate_CochDNN_features(
-    wav_path,
-    model,
-    output_root,
-    n_t=None,
-    out_sr=100,
-    device="cuda",
-    variant="",
-    time_window=[-1, 1],
-    half=False,
-):
-    feature = "cochdnn"
-    variants = [f"{variant}_layer{i}" for i in range(6)]
-    (
-        wav_name_no_ext,
-        waveform,
-        sample_rate,
-        t_num_new,
-        t_new,
-        feature_variant_out_dirs,
-    ) = prepare_waveform(
-        out_sr, wav_path, output_root, n_t, time_window, feature, variants
-    )
-    waveform = torch.as_tensor(waveform)
-    t_0s = [0.025, 0.0325, 0.0475, 0.0475, 0.0475, 0.0475]
-    srs = [200, 200 / 3, 50 / 3, 25 / 3, 25 / 3, 25 / 3]
-    before_pad_number = int(np.max(t_0s) * sample_rate) + 1
-    after_pad_number = 1200
-    waveform = torch.nn.functional.pad(waveform, (before_pad_number, after_pad_number))
-    t_0s = np.array(t_0s) - before_pad_number / sample_rate
-    with autocast(device_type=device.type,enabled=half):
-        outputs = extract_CochDNN(waveform, model, sample_rate, device=device)
-
-    for i, (feats, t_0, sr) in enumerate(zip(outputs, t_0s, srs)):
-        print(f"t_0_{i}={t_0}, sr_{i}={sr}")
-        feature_variant_out_dir = feature_variant_out_dirs[i]
-        ### align time to start from 0 and make the length to be n_t
-        t_length = feats.shape[0]
-        t_origin = np.arange(t_length) / sr + t_0
-
-        feats = align_time(feats, t_origin, t_new, "t f")
-        print(f"Feature {i}: {feats.shape}")
-
-        # save each layer as mat
-        out_mat_path = os.path.join(feature_variant_out_dir, f"{wav_name_no_ext}.mat")
-
-        # save data as mat
-        hdf5storage.savemat(
-            out_mat_path, {"features": feats, "t": t_new + time_window[0]}
-        )
-
-        write_summary(
-            feature_variant_out_dir,
-            time_window=f"{abs(time_window[0])} second before to {abs(time_window[1])} second after",
-            dimensions="[time, feature]",
-            sampling_rate=out_sr,
-            extra="Nothing",
-        )
-
-
-def cochdnn(
-    device,
-    output_root,
-    stim_names,
-    wav_dir,
-    out_sr=100,
-    pc=100,
-    time_window=[-1, 1],
-    pca_weights_from=None,
-    **kwargs,
-):
-    half = kwargs.get("half", False)
-    CochDNN_model = build_model()
-
-    variant = "wsa"
-    for stim_index, stim_name in enumerate(stim_names):
-        wav_path = os.path.join(wav_dir, f"{stim_name}.wav")
-        generate_CochDNN_features(
-            device=device,
-            model=CochDNN_model,
-            wav_path=wav_path,
-            output_root=output_root,
-            n_t=None,
-            out_sr=out_sr,
-            variant=variant,
-            time_window=time_window,
-            half=half,
-        )
-
-    # compute PC of cochdnn features
-    feature_name = "cochdnn"
-    layer_num = 6
-    if pc is not None:
-        for layer in range(layer_num):
-            wav_features = []
-            for stim_index, stim_name in enumerate(stim_names):
-                wav_path = os.path.join(wav_dir, f"{stim_name}.wav")
-                feature_path = f"{output_root}/features/{feature_name}/{variant}_layer{layer}/{stim_name}.mat"
-                feature = hdf5storage.loadmat(feature_path)["features"]
-                wav_features.append(feature)
-            print(f"Start computing PCs for {feature_name} layer {layer}")
-
-            if pca_weights_from is not None:
-                weights_path = f"{pca_weights_from}/features/{feature_name}/{variant}_layer{layer}/metadata/pca_weights.mat"
-                pca_pipeline = generate_pca_pipeline_from_weights(
-                    weights_from=weights_path, pc=pc
-                )
-            else:
-                pca_pipeline = generate_pca_pipeline(
-                    wav_features,
-                    pc,
-                    output_root,
-                    feature_name,
-                    demean=True,
-                    std=False,
-                    variant=f"{variant}_layer{layer}",
-                )
-            feature_variant_out_dir = apply_pca_pipeline(
-                wav_features,
-                pc,
-                output_root,
-                feature_name,
-                stim_names,
-                variant=f"{variant}_layer{layer}",
-                pca_pipeline=pca_pipeline,
-                time_window=time_window,
-                sampling_rate=out_sr,
-            )
 
 
 if __name__ == "__main__":

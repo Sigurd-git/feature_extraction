@@ -12,6 +12,127 @@ from utils.pc import (
 import torch
 
 
+def cochleagram_spectrotemporal(
+    device,
+    output_root,
+    stim_names,
+    wav_dir,
+    out_sr=100,
+    pc=100,
+    time_window=[-1, 1],
+    pca_weights_from=None,
+    compute_original=True,
+    meta_only=False,
+    **kwargs,
+):
+    #     % % tempmod: only temporal modulation filters
+    # % % specmod: only spectral modulation filters
+    # % % spectempmod: joint spectrotemporal filters
+    # % modulation_types = {'tempmod', 'specmod', 'spectempmod'};
+    # nonlin: modulus or real or rect
+    modulation_type = kwargs.get("modulation_type", "tempmod")
+    nonlin = kwargs.get("nonlin", "modulus")
+    debug = kwargs.get("debug", False)
+    feature_name = "cochleagram"
+    variant = "original"
+    if isinstance(device, str):
+        pass
+    elif isinstance(device, torch.device):
+        device = device.type
+        if device == "cuda":
+            device = "gpu"
+        else:
+            device = "cpu"
+    if compute_original:
+        generate_cochleagram_and_spectrotemporal(
+            device=device,
+            stim_names=stim_names,
+            wav_dir=wav_dir,
+            out_sr=out_sr,
+            modulation_type=modulation_type,
+            nonlin=nonlin,
+            output_root=output_root,
+            debug=debug,
+            time_window=time_window,
+        )
+
+    if pc is not None:
+        wav_features = []
+        for stim_index, stim_name in enumerate(stim_names):
+            feature_path = (
+                f"{output_root}/features/{feature_name}/{variant}/{stim_name}.mat"
+            )
+            feature = hdf5storage.loadmat(feature_path)["features"]
+            wav_features.append(feature)
+        print(f"Start computing PCs for {feature_name} ")
+        if pca_weights_from is not None:
+            weights_path = f"{pca_weights_from}/features/{feature_name}/{variant}/metadata/pca_weights.mat"
+            pca_pipeline = generate_pca_pipeline_from_weights(
+                weights_from=weights_path, pc=pc
+            )
+        else:
+            pca_pipeline = generate_pca_pipeline(
+                wav_features,
+                pc,
+                output_root,
+                feature_name,
+                demean=True,
+                std=False,
+                variant=variant,
+            )
+        feature_variant_out_dir = apply_pca_pipeline(
+            wav_features,
+            pc,
+            output_root,
+            feature_name,
+            stim_names,
+            pca_pipeline=pca_pipeline,
+            variant=variant,
+            time_window=time_window,
+            sampling_rate=out_sr,
+            meta_only=meta_only,
+        )
+    feature_name = "spectrotemporal"
+    variant = f"{modulation_type}_{nonlin}"
+    if pc is not None:
+        wav_features = []
+        for stim_index, stim_name in enumerate(stim_names):
+            feature_path = (
+                f"{output_root}/features/{feature_name}/{variant}/{stim_name}.mat"
+            )
+            feature = hdf5storage.loadmat(feature_path)["features"]
+            feature = feature.reshape(feature.shape[0], -1)
+            wav_features.append(feature)
+        print(f"Start computing PCs for {feature_name} ")
+        if pca_weights_from is not None:
+            weights_path = f"{pca_weights_from}/features/{feature_name}/{variant}/metadata/pca_weights.mat"
+            pca_pipeline = generate_pca_pipeline_from_weights(
+                weights_from=weights_path, pc=pc
+            )
+        else:
+            pca_pipeline = generate_pca_pipeline(
+                wav_features,
+                pc,
+                output_root,
+                feature_name,
+                demean=True,
+                std=False,
+                variant=variant,
+            )
+        feature_variant_out_dir = apply_pca_pipeline(
+            wav_features,
+            pc,
+            output_root,
+            feature_name,
+            stim_names,
+            pca_pipeline=pca_pipeline,
+            variant=variant,
+            time_window=time_window,
+            sampling_rate=out_sr,
+            meta_only=meta_only,
+        )
+
+
 def generate_cochleagram_and_spectrotemporal(
     device,
     stim_names,
@@ -135,121 +256,6 @@ def generate_cochleagram_and_spectrotemporal(
     )
     # remove temp_dir
     shutil.rmtree(temp_dir)
-
-
-def cochleagram_spectrotemporal(
-    device,
-    output_root,
-    stim_names,
-    wav_dir,
-    out_sr=100,
-    pc=100,
-    time_window=[-1, 1],
-    pca_weights_from=None,
-    **kwargs,
-):
-    #     % % tempmod: only temporal modulation filters
-    # % % specmod: only spectral modulation filters
-    # % % spectempmod: joint spectrotemporal filters
-    # % modulation_types = {'tempmod', 'specmod', 'spectempmod'};
-    # nonlin: modulus or real or rect
-    modulation_type = kwargs.get("modulation_type", "tempmod")
-    nonlin = kwargs.get("nonlin", "modulus")
-    debug = kwargs.get("debug", False)
-    if isinstance(device, str):
-        pass
-    elif isinstance(device, torch.device):
-        device = device.type
-        if device == "cuda":
-            device = "gpu"
-        else:
-            device = "cpu"
-    generate_cochleagram_and_spectrotemporal(
-        device=device,
-        stim_names=stim_names,
-        wav_dir=wav_dir,
-        out_sr=out_sr,
-        modulation_type=modulation_type,
-        nonlin=nonlin,
-        output_root=output_root,
-        debug=debug,
-        time_window=time_window,
-    )
-    feature_name = "cochleagram"
-    variant = "original"
-    if pc is not None:
-        wav_features = []
-        for stim_index, stim_name in enumerate(stim_names):
-            feature_path = (
-                f"{output_root}/features/{feature_name}/{variant}/{stim_name}.mat"
-            )
-            feature = hdf5storage.loadmat(feature_path)["features"]
-            wav_features.append(feature)
-        print(f"Start computing PCs for {feature_name} ")
-        if pca_weights_from is not None:
-            weights_path = f"{pca_weights_from}/features/{feature_name}/{variant}/metadata/pca_weights.mat"
-            pca_pipeline = generate_pca_pipeline_from_weights(
-                weights_from=weights_path, pc=pc
-            )
-        else:
-            pca_pipeline = generate_pca_pipeline(
-                wav_features,
-                pc,
-                output_root,
-                feature_name,
-                demean=True,
-                std=False,
-                variant=variant,
-            )
-        feature_variant_out_dir = apply_pca_pipeline(
-            wav_features,
-            pc,
-            output_root,
-            feature_name,
-            stim_names,
-            pca_pipeline=pca_pipeline,
-            variant=variant,
-            time_window=time_window,
-            sampling_rate=out_sr,
-        )
-    feature_name = "spectrotemporal"
-    variant = f"{modulation_type}_{nonlin}"
-    if pc is not None:
-        wav_features = []
-        for stim_index, stim_name in enumerate(stim_names):
-            feature_path = (
-                f"{output_root}/features/{feature_name}/{variant}/{stim_name}.mat"
-            )
-            feature = hdf5storage.loadmat(feature_path)["features"]
-            feature = feature.reshape(feature.shape[0], -1)
-            wav_features.append(feature)
-        print(f"Start computing PCs for {feature_name} ")
-        if pca_weights_from is not None:
-            weights_path = f"{pca_weights_from}/features/{feature_name}/{variant}/metadata/pca_weights.mat"
-            pca_pipeline = generate_pca_pipeline_from_weights(
-                weights_from=weights_path, pc=pc
-            )
-        else:
-            pca_pipeline = generate_pca_pipeline(
-                wav_features,
-                pc,
-                output_root,
-                feature_name,
-                demean=True,
-                std=False,
-                variant=variant,
-            )
-        feature_variant_out_dir = apply_pca_pipeline(
-            wav_features,
-            pc,
-            output_root,
-            feature_name,
-            stim_names,
-            pca_pipeline=pca_pipeline,
-            variant=variant,
-            time_window=time_window,
-            sampling_rate=out_sr,
-        )
 
 
 if __name__ == "__main__":

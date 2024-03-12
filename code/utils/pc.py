@@ -158,6 +158,7 @@ def apply_pca_pipeline(
     appendix="",
     time_window=[-1, 1],
     sampling_rate=100,
+    meta_only=False,
 ):
     feature_dir = os.path.join(output_root, "features", feature_name)
 
@@ -167,11 +168,11 @@ def apply_pca_pipeline(
         variant_dir = os.path.join(feature_dir, f"{variant}_pc{pc}{appendix}")
 
     os.makedirs(os.path.join(variant_dir, "metadata"), exist_ok=True)
-    out_mat_path = os.path.join(variant_dir, "metadata", "pca_weights.mat")
+    out_weights_path = os.path.join(variant_dir, "metadata", "pca_weights.mat")
     Vt = pca_pipeline.components
     Vt_all = pca_pipeline.Vt
     hdf5storage.savemat(
-        out_mat_path,
+        out_weights_path,
         {
             "V": Vt.T,
             "V_all": Vt_all.T,
@@ -179,28 +180,29 @@ def apply_pca_pipeline(
             "std": pca_pipeline.std,
         },
     )
-    feature = np.concatenate(wav_features, axis=0)
-    features_pc = pca_pipeline.transform(feature)
-    # split back to each wav
-    wav_features_pc = np.split(
-        features_pc,
-        np.cumsum([len(wav_feature) for wav_feature in wav_features])[:-1],
-        axis=0,
-    )
-    for wav_feature_pc, wav_name_no_ext in zip(wav_features_pc, wav_noext_names):
-        out_mat_path = os.path.join(variant_dir, f"{wav_name_no_ext}.mat")
+    if not meta_only:
+        feature = np.concatenate(wav_features, axis=0)
+        features_pc = pca_pipeline.transform(feature)
+        # split back to each wav
+        wav_features_pc = np.split(
+            features_pc,
+            np.cumsum([len(wav_feature) for wav_feature in wav_features])[:-1],
+            axis=0,
+        )
+        for wav_feature_pc, wav_name_no_ext in zip(wav_features_pc, wav_noext_names):
+            out_mat_path = os.path.join(variant_dir, f"{wav_name_no_ext}.mat")
 
-        if not os.path.exists(variant_dir):
-            os.makedirs(variant_dir)
+            if not os.path.exists(variant_dir):
+                os.makedirs(variant_dir)
 
-        # save data as mat
-        hdf5storage.savemat(out_mat_path, {"features": wav_feature_pc})
+            # save data as mat
+            hdf5storage.savemat(out_mat_path, {"features": wav_feature_pc})
     write_summary(
         variant_dir,
         time_window=f"{abs(time_window[0])} second before to {abs(time_window[1])} second after",
         dimensions="[time, pc]",
         sampling_rate=sampling_rate,
-        extra=f"""Weights are saved to {out_mat_path}
+        extra=f"""Weights are saved to {out_weights_path}
 You can reconstruct (nearly) the original features by reading in the US from the stimname files and multiply by V^T
 In python:
 feature = hdf5storage.loadmat(stim_file)["features"]

@@ -1,4 +1,6 @@
+Created on: 240312-155447;
 Time window: [-1.  1.];
 The dimensions of the matrices: [time, feaquency];
+The sampling rate of the features: 25.0 Hz;
 Code used to generate those features are here: https://github.com/Sigurd-git/feature_extraction/tree/main/code/utils;
 Extra comments: Parameters used to generate the cochleagram are contained in P variable of parameter.mat in the same directory..

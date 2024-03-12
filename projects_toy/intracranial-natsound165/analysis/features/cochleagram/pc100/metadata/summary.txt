@@ -1,5 +1,12 @@
+Created on: 240312-155529;
 Time window: 1 second before to 1 second after;
 The dimensions of the matrices: [time, pc];
+The sampling rate of the features: 25 Hz;
 Code used to generate those features are here: https://github.com/Sigurd-git/feature_extraction/tree/main/code/utils;
-Extra comments: Weights are saved to feature_extraction/projects_toy/intracranial-natsound165/analysis/features/cochleagram/pc100/stim7_applause.mat
-Read in the US from the stimname files and multiply by V^T.
+Extra comments: Weights are saved to feature_extraction/projects_toy/intracranial-natsound165/analysis/features/cochleagram/pc100/metadata/pca_weights.mat
+You can reconstruct (nearly) the original features by reading in the US from the stimname files and multiply by V^T
+In python:
+feature = hdf5storage.loadmat(stim_file)["features"]
+Vt = hdf5storage.loadmat(pca_weights_file)["V"]
+original_feature = np.matmul(feature, V.T)
+.

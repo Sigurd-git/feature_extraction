@@ -27,47 +27,6 @@ audio_tools = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(audio_tools)
 
 
-# stim_names, output_root, wav_dir, out_sr, pc
-def generate_spectrogram_features(
-    out_sr, nfilts, wav_path, output_root, n_t=None, time_window=[-1, 1]
-):
-    feature = "spectrogram"
-    variant = "original"
-    (
-        wav_name_no_ext,
-        waveform,
-        sample_rate,
-        t_num_new,
-        t_new,
-        feature_variant_out_dirs,
-    ) = prepare_waveform(
-        out_sr, wav_path, output_root, n_t, time_window, feature, [variant]
-    )
-    feature_variant_out_dir = feature_variant_out_dirs[0]
-    # pad waveform about 10/100 seconds
-    waveform = np.pad(waveform, (0, int(10 / out_sr * sample_rate)), "constant")
-    mel_spectrogram, freqs = audio_tools.get_mel_spectrogram(
-        waveform, sample_rate, steptime=1 / out_sr, nfilts=nfilts
-    )
-    mel_spectrogram = mel_spectrogram[:, :t_num_new].T
-
-    # save each layer as mat
-    out_mat_path = os.path.join(feature_variant_out_dir, f"{wav_name_no_ext}.mat")
-
-    hdf5storage.savemat(
-        out_mat_path, {"features": mel_spectrogram, "t": t_new + time_window[0]}
-    )
-
-    # generate meta file for this layer
-    write_summary(
-        feature_variant_out_dir,
-        time_window=f"{abs(time_window[0])} second before to {abs(time_window[1])} second after",
-        dimensions="[time, feature]",
-        sampling_rate=out_sr,
-        extra="Nothing",
-    )
-
-
 def spectrogram(
     device,
     output_root,
@@ -78,6 +37,7 @@ def spectrogram(
     time_window=[-1, 1],
     pca_weights_from=None,
     compute_original=True,
+    meta_only=False,
     **kwargs,
 ):
     nfilts = kwargs.get("nfilts", 80)
@@ -85,7 +45,12 @@ def spectrogram(
         for stim_index, stim_name in enumerate(stim_names):
             wav_path = os.path.join(wav_dir, f"{stim_name}.wav")
             generate_spectrogram_features(
-                out_sr, nfilts, wav_path, output_root, time_window=time_window
+                out_sr,
+                nfilts,
+                wav_path,
+                output_root,
+                time_window=time_window,
+                meta_only=meta_only,
             )
 
     if pc < nfilts:
@@ -125,7 +90,59 @@ def spectrogram(
             variant=variant,
             time_window=time_window,
             sampling_rate=out_sr,
+            meta_only=meta_only,
         )
+
+
+# stim_names, output_root, wav_dir, out_sr, pc
+def generate_spectrogram_features(
+    out_sr,
+    nfilts,
+    wav_path,
+    output_root,
+    n_t=None,
+    time_window=[-1, 1],
+    meta_only=False,
+):
+    feature = "spectrogram"
+    variant = "original"
+    if not meta_only:
+        (
+            wav_name_no_ext,
+            waveform,
+            sample_rate,
+            t_num_new,
+            t_new,
+            feature_variant_out_dirs,
+        ) = prepare_waveform(
+            out_sr, wav_path, output_root, n_t, time_window, feature, [variant]
+        )
+        feature_variant_out_dir = feature_variant_out_dirs[0]
+        # pad waveform about 10/100 seconds
+        waveform = np.pad(waveform, (0, int(10 / out_sr * sample_rate)), "constant")
+        mel_spectrogram, freqs = audio_tools.get_mel_spectrogram(
+            waveform, sample_rate, steptime=1 / out_sr, nfilts=nfilts
+        )
+        mel_spectrogram = mel_spectrogram[:, :t_num_new].T
+
+        # save each layer as mat
+        out_mat_path = os.path.join(feature_variant_out_dir, f"{wav_name_no_ext}.mat")
+
+        hdf5storage.savemat(
+            out_mat_path, {"features": mel_spectrogram, "t": t_new + time_window[0]}
+        )
+    else:
+        feature_variant_out_dir = os.path.join(
+            output_root, "features", feature, variant
+        )
+    # generate meta file for this layer
+    write_summary(
+        feature_variant_out_dir,
+        time_window=f"{abs(time_window[0])} second before to {abs(time_window[1])} second after",
+        dimensions="[time, feature]",
+        sampling_rate=out_sr,
+        extra="Nothing",
+    )
 
 
 if __name__ == "__main__":

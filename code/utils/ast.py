@@ -26,25 +26,29 @@ def ast(
     pc=100,
     time_window=[-1, 1],
     pca_weights_from=None,
+    compute_original=True,
+    meta_only=False,
     **kwargs,
 ):
     half = kwargs.get("half", False)
-    AST_model = AutoModel.from_pretrained("MIT/ast-finetuned-audioset-10-10-0.4593").to(
-        device
-    )
 
-    for stim_index, stim_name in enumerate(stim_names):
-        wav_path = os.path.join(wav_dir, f"{stim_name}.wav")
-        generate_AST_features(
-            device,
-            AST_model,
-            wav_path,
-            output_root,
-            n_t=None,
-            out_sr=out_sr,
-            time_window=time_window,
-            half=half,
-        )
+    if compute_original:
+        AST_model = AutoModel.from_pretrained(
+            "MIT/ast-finetuned-audioset-10-10-0.4593"
+        ).to(device)
+        for stim_index, stim_name in enumerate(stim_names):
+            wav_path = os.path.join(wav_dir, f"{stim_name}.wav")
+            generate_AST_features(
+                device,
+                AST_model,
+                wav_path,
+                output_root,
+                n_t=None,
+                out_sr=out_sr,
+                time_window=time_window,
+                half=half,
+                meta_only=meta_only,
+            )
 
     # compute PC of ast features
     feature_name = "ast"
@@ -83,6 +87,7 @@ def ast(
                 pca_pipeline=pca_pipeline,
                 time_window=time_window,
                 sampling_rate=out_sr,
+                meta_only=meta_only,
             )
 
 
@@ -95,9 +100,11 @@ def generate_AST_features(
     out_sr=100,
     time_window=[-1, 1],
     half=False,
+    meta_only=False,
 ):
     feature = "ast"
     variants = [f"layer{i}" for i in range(14)]
+
     (
         wav_name_no_ext,
         waveform,
@@ -108,46 +115,60 @@ def generate_AST_features(
     ) = prepare_waveform(
         out_sr, wav_path, output_root, n_t, time_window, feature, variants
     )
-    waveform = torch.as_tensor(waveform)
+    if not meta_only:
+        waveform = torch.as_tensor(waveform)
 
-    # pad the waveform to cover 0
-    t_0s = [0.01246875] + [0.08746875] * 13
-    srs = [100] + [10] * 13
-    before_pad_number = int(np.max(t_0s) * sample_rate) + 1
-    after_pad_number = 160000 * 3
-    t_0s = np.array(t_0s) - before_pad_number / sample_rate
-    waveform = torch.nn.functional.pad(waveform, (before_pad_number, after_pad_number))
-    with autocast(device_type=device.type, enabled=half):
-        outputs = extract_AST(device, AST_model, waveform, sample_rate)
-    for i, (feats, t_0, sr) in enumerate(zip(outputs, t_0s, srs)):
-        # The start time of output of layer n is: t_0_{n+1} = t_0_{n} + (conv_kernel_{n}-1) / (2*sr_{n})
-        # The sr of output of layer n is: sr_{n+1} = sr_{n} / conv_stride_{n}
-        print(f"t_0_{i}={t_0}, sr_{i}={sr}")
-
-        feats = feats.cpu().numpy()
-        ### align time to start from 0 and make the length to be n_t
-        t_length = feats.shape[0]
-        t_origin = np.arange(t_length) / sr + t_0
-
-        feats = align_time(feats, t_origin, t_new, "t f")
-        print(f"Feature {i}: {feats.shape}")
-        feature_variant_out_dir = feature_variant_out_dirs[i]
-        # save each layer as mat
-        out_mat_path = os.path.join(feature_variant_out_dir, f"{wav_name_no_ext}.mat")
-
-        # save data as mat
-        hdf5storage.savemat(
-            out_mat_path, {"features": feats, "t": t_new + time_window[0]}
+        # pad the waveform to cover 0
+        t_0s = [0.01246875] + [0.08746875] * 13
+        srs = [100] + [10] * 13
+        before_pad_number = int(np.max(t_0s) * sample_rate) + 1
+        after_pad_number = 160000 * 3
+        t_0s = np.array(t_0s) - before_pad_number / sample_rate
+        waveform = torch.nn.functional.pad(
+            waveform, (before_pad_number, after_pad_number)
         )
-        # generate meta file for this layer
+        with autocast(device_type=device.type, enabled=half):
+            outputs = extract_AST(device, AST_model, waveform, sample_rate)
+        for i, (feats, t_0, sr) in enumerate(zip(outputs, t_0s, srs)):
+            # The start time of output of layer n is: t_0_{n+1} = t_0_{n} + (conv_kernel_{n}-1) / (2*sr_{n})
+            # The sr of output of layer n is: sr_{n+1} = sr_{n} / conv_stride_{n}
+            print(f"t_0_{i}={t_0}, sr_{i}={sr}")
 
-        write_summary(
-            feature_variant_out_dir,
-            time_window=f"{abs(time_window[0])} second before to {abs(time_window[1])} second after",
-            sampling_rate=out_sr,
-            dimensions="[time, feature]",
-            extra="Nothing",
-        )
+            feats = feats.cpu().numpy()
+            ### align time to start from 0 and make the length to be n_t
+            t_length = feats.shape[0]
+            t_origin = np.arange(t_length) / sr + t_0
+
+            feats = align_time(feats, t_origin, t_new, "t f")
+            print(f"Feature {i}: {feats.shape}")
+            feature_variant_out_dir = feature_variant_out_dirs[i]
+            # save each layer as mat
+            out_mat_path = os.path.join(
+                feature_variant_out_dir, f"{wav_name_no_ext}.mat"
+            )
+
+            # save data as mat
+            hdf5storage.savemat(
+                out_mat_path, {"features": feats, "t": t_new + time_window[0]}
+            )
+            # generate meta file for this layer
+
+            write_summary(
+                feature_variant_out_dir,
+                time_window=f"{abs(time_window[0])} second before to {abs(time_window[1])} second after",
+                sampling_rate=out_sr,
+                dimensions="[time, feature]",
+                extra="Nothing",
+            )
+        else:
+            for feature_variant_out_dir in feature_variant_out_dirs:
+                write_summary(
+                    feature_variant_out_dir,
+                    time_window=f"{abs(time_window[0])} second before to {abs(time_window[1])} second after",
+                    sampling_rate=out_sr,
+                    dimensions="[time, feature]",
+                    extra="Nothing",
+                )
 
 
 def process_waveform(waveform, kernel=163840, stride=81920):

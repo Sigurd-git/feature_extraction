@@ -3,6 +3,7 @@ import torchaudio
 import numpy as np
 import hdf5storage
 import matlab
+import time
 
 
 def write_summary(
@@ -18,10 +19,15 @@ def write_summary(
     os.makedirs(meta_out_dir, exist_ok=True)
 
     meta_out_path = os.path.join(meta_out_dir, "summary.txt")
+
+    # get yyyy-mm-dd-hh:mm:ss
+    now = time.strftime("%Y-%m-%d-%H:%M:%S")
+
     # generate meta file for this feature
     with open(meta_out_path, "w") as f:
         f.write(
-            f"""Time window: {time_window};
+            f"""Created on: {now};
+Time window: {time_window};
 The dimensions of the matrices: {dimensions};
 The sampling rate of the features: {sampling_rate} Hz;
 Code used to generate those features are here: {url};
