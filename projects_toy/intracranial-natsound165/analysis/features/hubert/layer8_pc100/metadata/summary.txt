@@ -1,0 +1,4 @@
+Time window: 1 second before to 1 second after;
+The dimensions of the matrices: [time, pc];
+Code used to generate those features are here: https://github.com/Sigurd-git/feature_extraction/tree/main/code/utils;
+Extra comments: Weights are saved to.
