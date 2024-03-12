@@ -77,14 +77,16 @@ def spectrogram(
     pc=100,
     time_window=[-1, 1],
     pca_weights_from=None,
+    compute_original=True,
     **kwargs,
 ):
     nfilts = kwargs.get("nfilts", 80)
-    for stim_index, stim_name in enumerate(stim_names):
-        wav_path = os.path.join(wav_dir, f"{stim_name}.wav")
-        generate_spectrogram_features(
-            out_sr, nfilts, wav_path, output_root, time_window=time_window
-        )
+    if compute_original:
+        for stim_index, stim_name in enumerate(stim_names):
+            wav_path = os.path.join(wav_dir, f"{stim_name}.wav")
+            generate_spectrogram_features(
+                out_sr, nfilts, wav_path, output_root, time_window=time_window
+            )
 
     if pc < nfilts:
         feature_name = "spectrogram"

@@ -158,7 +158,6 @@ sam_code_workspace/project/features
 .hydra
 .vscode
 ckpts
-projects_toy/intracranial-natsound165/analysis/features
 sam_code_workspace/projects/intracranial-natsound165/
 sam_code_workspace/projects/syllable-invariances_v2/
 sam_code_workspace/project/

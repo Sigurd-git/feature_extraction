@@ -76,6 +76,7 @@ def main(cfg):
             time_window=args_dict.time_window,
             pca_weights_from=args_dict.pca_weights_from,
             half=args_dict.half,
+            compute_original=args_dict.compute_original,
         )
     elif args_dict.feature == "cochdnn":
         from utils.cochdnn import cochdnn
@@ -90,6 +91,7 @@ def main(cfg):
             time_window=args_dict.time_window,
             pca_weights_from=args_dict.pca_weights_from,
             half=args_dict.half,
+            compute_original=args_dict.compute_original,
         )
     elif args_dict.feature == "cochleagram_spectrotemporal":
         from utils.cochleagram_spectrotemporal import cochleagram_spectrotemporal
@@ -105,6 +107,7 @@ def main(cfg):
             nonlin=args_dict.spectrotemporal.nonlin,
             time_window=args_dict.time_window,
             pca_weights_from=args_dict.pca_weights_from,
+            compute_original=args_dict.compute_original,
         )
     elif args_dict.feature == "cochresnet":
         from utils.cochresnet import cochresnet
@@ -119,6 +122,7 @@ def main(cfg):
             time_window=args_dict.time_window,
             pca_weights_from=args_dict.pca_weights_from,
             half=args_dict.half,
+            compute_original=args_dict.compute_original,
         )
     elif args_dict.feature == "hubert":
         from utils.hubert import hubert
@@ -133,6 +137,7 @@ def main(cfg):
             time_window=args_dict.time_window,
             pca_weights_from=args_dict.pca_weights_from,
             half=args_dict.half,
+            compute_original=args_dict.compute_original,
         )
     elif args_dict.feature == "spectrogram":
         from utils.spectrogram import spectrogram
@@ -147,6 +152,7 @@ def main(cfg):
             nfilts=args_dict.spectrogram.nfilts,
             time_window=args_dict.time_window,
             pca_weights_from=args_dict.pca_weights_from,
+            compute_original=args_dict.compute_original,
         )
         pass
     else:

@@ -1,0 +1,4 @@
+Time window: [-1.  1.];
+The dimensions of the matrices: [time, frequency, spectral modulation, temporal modulation, rate];
+Code used to generate those features are here: https://github.com/Sigurd-git/feature_extraction/tree/main/code/utils;
+Extra comments: Parameters used to generate the spectrotemporal are contained in P variable of parameter.mat in the same directory..
