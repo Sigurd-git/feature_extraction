@@ -287,6 +287,7 @@ if __name__ == "__main__":
     from transformers import AutoModel
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
+    device = torch.device(device)
     model = AutoModel.from_pretrained("MIT/ast-finetuned-audioset-10-10-0.4593").to(
         device
     )
@@ -295,7 +296,7 @@ if __name__ == "__main__":
         f"{__file__}/../../../projects_toy/{project}/analysis"
     )
     wav_dir = os.path.abspath(
-        f"{__file__}/../../../projects_toy/intracranial-natsound165/stimuli/stimulus_audio"
+        f"{__file__}/../../../projects_toy/intracranial-natsound165/stimuli/audio"
     )
     stim_names = ["stim5_alarm_clock"]
     ast(device, output_root, stim_names, wav_dir, out_sr=100, pc=100, half=True)
