@@ -129,6 +129,8 @@ def generate_CochDNN_features(
             waveform, (before_pad_number, after_pad_number)
         )
         t_0s = np.array(t_0s) - before_pad_number / sample_rate
+        if device.type == "mps":
+            half = False
         with autocast(device_type=device.type, enabled=half):
             outputs = extract_CochDNN(waveform, model, sample_rate, device=device)
 

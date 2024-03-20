@@ -144,6 +144,9 @@ def generate_HUBERT_features(
     if not meta_only:
         waveform = torch.as_tensor(waveform)
         waveform = waveform.to(device)
+
+        if device.type == "mps":
+            half = False
         with autocast(device_type=device.type, enabled=half):
             HUBERT_bundle = torchaudio.pipelines.HUBERT_BASE  #    HUBERT_bundle (HUBERTBundle): The HUBERT bundle containing the sample rate and other information.
             conv_kernels = [

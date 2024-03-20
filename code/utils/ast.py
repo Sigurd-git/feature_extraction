@@ -127,6 +127,8 @@ def generate_AST_features(
         waveform = torch.nn.functional.pad(
             waveform, (before_pad_number, after_pad_number)
         )
+        if device.type == "mps":
+            half = False
         with autocast(device_type=device.type, enabled=half):
             outputs = extract_AST(device, AST_model, waveform, sample_rate)
         for i, (feats, t_0, sr) in enumerate(zip(outputs, t_0s, srs)):
@@ -286,7 +288,13 @@ def extract_AST(device, AST_model, waveform, sample_rate, stride_in_seconds=9):
 if __name__ == "__main__":
     from transformers import AutoModel
 
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    # if torch.cuda.is_available():
+    #     device = "cuda"
+    # elif torch.backends.mps.is_available():
+    #     device = "mps"
+    # else:
+    #     device = "cpu"
+    device = "cpu"
     device = torch.device(device)
     model = AutoModel.from_pretrained("MIT/ast-finetuned-audioset-10-10-0.4593").to(
         device

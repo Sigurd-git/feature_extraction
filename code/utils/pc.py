@@ -3,13 +3,13 @@ import hdf5storage
 import numpy as np
 import os
 from utils.shared import write_summary
+from sklearn.decomposition import PCA as PCA_sklearn
 
 
 class PCA:
-    def __init__(self, n_components, demean=True, standardize=False):
+    def __init__(self, n_components, whiten=False):
         self.n_components = n_components
-        self.demean = demean
-        self.standardize = standardize
+        self.whiten = whiten
         self.mean = None
         self.std = None
         self.components = None
@@ -26,21 +26,15 @@ class PCA:
         - X: numpy array of shape (n_samples, n_features)
         """
 
-        if self.demean:
-            self.mean = np.mean(X, axis=0)
-        else:
-            self.mean = 0
-        X = X - self.mean
+        if self.whiten:
+            self.std = np.std(X, axis=0)
 
-        if self.standardize:
-            self.std = np.std(X, axis=0, ddof=1)
-        else:
-            self.std = 1
-        X = X / self.std
-
-        self.U, self.S, self.Vt = svd(X, full_matrices=False)
-
+        n_features = X.shape[1]
+        pca_sklearn = PCA_sklearn(n_components=n_features, whiten=self.whiten)
+        pca_sklearn.fit(X)
+        self.Vt = pca_sklearn.components_
         self.components = self.Vt[: self.n_components]
+        self.mean = pca_sklearn.mean_
 
     def load(self, mean, std, V_all):
         """
@@ -237,3 +231,20 @@ def generate_pca_pipeline_from_weights(
     pca_pipeline.load(mean, std, V_all)
 
     return pca_pipeline
+
+
+if __name__ == "__main__":
+    # test
+    import numpy as np
+
+    # generate random data
+    n_samples = 100
+    n_features = 10
+    demean = True
+    std = False
+    X = np.random.rand(n_samples, n_features)
+
+    # fit PCA
+    pc = 3
+    pca = PCA(n_components=pc)
+    pca.fit(X)
