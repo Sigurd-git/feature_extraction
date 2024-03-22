@@ -1,9 +1,9 @@
-Created on: 240312-155529;
+Created on: 2024-03-20-19:54:25;
 Time window: 1 second before to 1 second after;
 The dimensions of the matrices: [time, pc];
-The sampling rate of the features: 25 Hz;
+The sampling rate of the features: 100 Hz;
 Code used to generate those features are here: https://github.com/Sigurd-git/feature_extraction/tree/main/code/utils;
-Extra comments: Weights are saved to feature_extraction/projects_toy/intracranial-natsound165/analysis/features/cochleagram/pc100/metadata/pca_weights.mat
+Extra comments: Weights are saved to /home/gliao2/snormanh_lab_shared/code/snormanh_lab_python/feature_extraction/projects_toy/intracranial-natsound165/analysis/features/cochleagram/pc100/metadata/pca_weights.mat
 You can reconstruct (nearly) the original features by reading in the US from the stimname files and multiply by V^T
 In python:
 feature = hdf5storage.loadmat(stim_file)["features"]

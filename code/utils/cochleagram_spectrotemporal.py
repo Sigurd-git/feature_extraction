@@ -10,6 +10,7 @@ from utils.pc import (
     generate_pca_pipeline_from_weights,
 )
 import torch
+import uuid
 
 
 def cochleagram_spectrotemporal(
@@ -76,8 +77,7 @@ def cochleagram_spectrotemporal(
                 pc,
                 output_root,
                 feature_name,
-                demean=True,
-                std=False,
+                whiten=False,
                 variant=variant,
             )
         feature_variant_out_dir = apply_pca_pipeline(
@@ -115,8 +115,7 @@ def cochleagram_spectrotemporal(
                 pc,
                 output_root,
                 feature_name,
-                demean=True,
-                std=False,
+                whiten=False,
                 variant=variant,
             )
         feature_variant_out_dir = apply_pca_pipeline(
@@ -197,18 +196,25 @@ def generate_cochleagram_and_spectrotemporal(
         coch_out_mat_path = os.path.join(
             feature_original_cochleagram_dir, f"{stim_name}.mat"
         )
+        random_filename = str(uuid.uuid4()) + ".txt"
+        coch_random_path = os.path.join(
+            feature_original_cochleagram_dir, random_filename
+        )
         cochleagram_path = os.path.join(coch_output_directory, f"coch_{stim_name}.mat")
         cochleagrams = hdf5storage.loadmat(cochleagram_path)["F"]  # t x pc
 
         t_new = np.arange(cochleagrams.shape[0]) / out_sr + time_window[0]
-        hdf5storage.savemat(coch_out_mat_path, {"features": cochleagrams, "t": t_new})
-
+        hdf5storage.savemat(coch_random_path, {"features": cochleagrams, "t": t_new})
+        os.rename(coch_random_path, coch_out_mat_path)
         # save spectrotemporal original
         spectrotemporal_out_mat_path = os.path.join(
             feature_variant_spectrotemporal_dir, f"{stim_name}.mat"
         )
         spectrotemporal_path = os.path.join(
             modulation_output_directory, f"{modulation_type}_{nonlin}_{stim_name}.mat"
+        )
+        spsctrotemporal_random_path = os.path.join(
+            feature_variant_spectrotemporal_dir, random_filename
         )
         spectrotemporals = hdf5storage.loadmat(spectrotemporal_path)[
             "F"
@@ -227,8 +233,9 @@ def generate_cochleagram_and_spectrotemporal(
 
         t_new = np.arange(spectrotemporals.shape[0]) / out_sr + time_window[0]
         hdf5storage.savemat(
-            spectrotemporal_out_mat_path, {"features": spectrotemporals, "t": t_new}
+            spsctrotemporal_random_path, {"features": spectrotemporals, "t": t_new}
         )
+        os.rename(spsctrotemporal_random_path, spectrotemporal_out_mat_path)
     P = hdf5storage.loadmat(cochleagram_path)["P"]
     f = P["f"][0, 0].reshape(-1)
     parameter_dict = {}
@@ -264,10 +271,20 @@ if __name__ == "__main__":
         output_root=os.path.abspath(
             f"{__file__}/../../../projects_toy/intracranial-natsound165/analysis"
         ),
-        stim_names=["stim5_alarm_clock", "stim7_applause"],
+        stim_names=[
+            "stim5_alarm_clock",
+            "stim7_applause",
+            "stim5_alarm_clock",
+            "stim7_applause",
+            "stim5_alarm_clock",
+            "stim7_applause",
+            "stim5_alarm_clock",
+            "stim7_applause",
+        ],
         wav_dir=os.path.abspath(
             f"{__file__}/../../../projects_toy/intracranial-natsound165/stimuli/audio"
         ),
         modulation_type="tempmod",
         debug=True,
+        compute_original=False,
     )

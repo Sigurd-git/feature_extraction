@@ -76,8 +76,7 @@ def spectrogram(
                 pc,
                 output_root,
                 feature_name,
-                demean=True,
-                std=False,
+                whiten=False,
                 variant=variant,
             )
         apply_pca_pipeline(

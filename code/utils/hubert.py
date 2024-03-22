@@ -72,8 +72,7 @@ def hubert(
                     pc,
                     output_root,
                     feature_name,
-                    demean=True,
-                    std=False,
+                    whiten=False,
                     variant=f"layer{layer}",
                 )
             feature_variant_out_dir = apply_pca_pipeline(
